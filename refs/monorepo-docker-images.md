@@ -1,6 +1,6 @@
 # Monorepo — Docker images
 
-> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-22 · **Source:** monorepo-boilerplate@feat/PP-13-cd-deploy-tag-vercel-render-neon
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -141,4 +141,6 @@ need no host toolchain setup (skip the shared setup action) and build via Buildx
 built rots; the first one in this repo did, which is why it was deleted before these were written.
 Keep the workflows.
 
-Nothing pushes an image: there is no deploy workflow (`monorepo-ci.md`).
+PR image workflows still build with `push: false`. **CD** (`.github/workflows/cd.yml`) pushes the
+API image to GHCR on tag `v*` — see `monorepo-deploy.md`. Web production deploys via Vercel’s
+native Next build, not the web Docker image.

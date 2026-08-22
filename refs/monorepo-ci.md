@@ -1,6 +1,6 @@
 # Monorepo — CI
 
-> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-22 · **Source:** monorepo-boilerplate@feat/PP-13-cd-deploy-tag-vercel-render-neon
 
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
@@ -28,6 +28,8 @@ called `docker build` would be indistinguishable there. Keep names unique when a
 
 **Only on pull requests whose base is `main`.** There is no `push` trigger and no other base branch:
 `main` is the only long-lived branch in this repo, so a PR to `main` is the only path into it.
+Production deploy is a **separate** workflow (`.github/workflows/cd.yml`) on tag `v*` — see
+`monorepo-deploy.md`. Do not fold deploy into these PR checks.
 
 | Event | Runs? |
 |---|---|
@@ -35,6 +37,7 @@ called `docker build` would be indistinguishable there. Keep names unique when a
 | PR against any other base | no |
 | push to `main` (i.e. the merge) | **no** |
 | push to a feature branch with no PR | no |
+| push tag `v*` / CD `workflow_dispatch` | PR CI **no** — CD yes (`monorepo-deploy.md`) |
 
 Each workflow has a `concurrency` group keyed on workflow + ref, so a new push to the PR cancels the
 superseded run.
@@ -94,7 +97,7 @@ The Playwright HTML report is uploaded as an artifact whenever the job is not ca
 |---|---|
 | `pnpm db:seed` | not run in CI (no-op today) |
 | the `app` database | CI only ever creates `app_test`; the API tests migrate `db:migrate:test` alone, never the root `pnpm db:migrate` |
-| Deploy / release | no workflow exists — CI *builds* both app images but never pushes one |
+| Deploy / release | owned by CD on tag `v*` — see `monorepo-deploy.md`. PR image workflows still `push: false` |
 | `main` after the merge | nothing re-runs post-merge. The gate is the PR, so a branch that was up to date with `main` when it went green is what lands; a stale branch is the case this does not cover |
 
 ## Rules

@@ -1,0 +1,187 @@
+name: CD
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing git tag to redeploy (e.g. v1.2.3). Required for dispatch.
+        required: true
+        type: string
+
+concurrency:
+  group: cd-${{ github.workflow }}-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/bernardoavsouza/home-utilities-api
+
+jobs:
+  deploy:
+    name: deploy · tag → GHCR → Neon → Render → Vercel → smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: meta
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          case "$TAG" in
+            v*) ;;
+            *)
+              echo "Tag must match v* (got: $TAG)"
+              exit 1
+              ;;
+          esac
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
+          fi
+          COMMIT="$(git rev-list -n 1 "$TAG")"
+          SHORT_SHA="$(git rev-parse --short=7 "$COMMIT")"
+          {
+            echo "tag=$TAG"
+            echo "commit=$COMMIT"
+            echo "short_sha=$SHORT_SHA"
+            echo "image_tag=${IMAGE_NAME}:$TAG"
+            echo "image_sha=${IMAGE_NAME}:sha-$SHORT_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Assert tag commit is on origin/main
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge-base --is-ancestor "${{ steps.meta.outputs.commit }}" origin/main; then
+            echo "Commit ${{ steps.meta.outputs.commit }} (tag ${{ steps.meta.outputs.tag }}) is not on origin/main"
+            exit 1
+          fi
+
+      - name: Checkout tagged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.commit }}
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.image_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Migrate Neon (prisma migrate deploy)
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e DATABASE_URL \
+            "${{ steps.meta.outputs.image_tag }}" \
+            ./node_modules/.bin/prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Deploy Render (deploy hook + imgURL)
+        run: |
+          set -euo pipefail
+          IMAGE_URL="${{ steps.meta.outputs.image_tag }}"
+          ENCODED="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$IMAGE_URL")"
+          HOOK="${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          case "$HOOK" in
+            *\?*) URL="${HOOK}&imgURL=${ENCODED}" ;;
+            *) URL="${HOOK}?imgURL=${ENCODED}" ;;
+          esac
+          curl -fsS -X POST "$URL"
+
+      - name: Wait for Render rollout
+        run: sleep 45
+
+      - name: Smoke API health + ready
+        run: |
+          set -euo pipefail
+          BASE="${{ secrets.RENDER_API_URL }}"
+          BASE="${BASE%/}"
+          smoke() {
+            local path="$1"
+            local i=1
+            while [ "$i" -le 18 ]; do
+              code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' "$BASE$path" || true)"
+              if [ "$code" = "200" ]; then
+                echo "OK $path ($code)"
+                return 0
+              fi
+              echo "attempt $i: $path → $code"
+              i=$((i + 1))
+              sleep 10
+            done
+            echo "Smoke failed for $path"
+            cat /tmp/smoke-body || true
+            exit 1
+          }
+          smoke /v1/health
+          smoke /v1/health/ready
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@41
+
+      - name: Deploy Vercel (prod)
+        run: |
+          set -euo pipefail
+          API_BASE="${{ secrets.RENDER_API_URL }}"
+          API_BASE="${API_BASE%/}"
+          export NEXT_PUBLIC_API_URL="${API_BASE}/v1"
+          vercel deploy --prod --yes \
+            --token="${{ secrets.VERCEL_TOKEN }}" \
+            --build-env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            --env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Smoke web home
+        run: |
+          set -euo pipefail
+          WEB="${{ secrets.VERCEL_WEB_URL }}"
+          WEB="${WEB%/}"
+          i=1
+          while [ "$i" -le 12 ]; do
+            code="$(curl -sS -o /tmp/web-body -w '%{http_code}' "$WEB/" || true)"
+            if [ "$code" = "200" ]; then
+              echo "OK web home ($code)"
+              exit 0
+            fi
+            echo "attempt $i: web → $code"
+            i=$((i + 1))
+            sleep 10
+          done
+          echo "Smoke failed for web home"
+          cat /tmp/web-body || true
+          exit 1
