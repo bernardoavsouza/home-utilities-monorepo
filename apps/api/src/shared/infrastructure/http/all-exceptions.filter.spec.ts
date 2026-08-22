@@ -1,9 +1,5 @@
 import type { ApiErrorBody } from '@packages/contracts';
-import {
-  type ArgumentsHost,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { type ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { AllExceptionsFilter } from '@/shared/infrastructure/http/all-exceptions.filter';
 
