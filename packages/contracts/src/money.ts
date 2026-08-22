@@ -1,4 +1,4 @@
-export type CurrencyCode = string;
+export type CurrencyCode = string & { readonly __brand: 'CurrencyCode' };
 
 export type Money = {
   amount: string;

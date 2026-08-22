@@ -86,10 +86,10 @@ Out of scope:
 
 - **Panel orientation:** types describe UI/API panel payloads and actions, not raw CRUD tables.
 - **Money:** every monetary field is `Money = { amount: string; currency: CurrencyCode }`. No bare `number` money. `amount` is a decimal string in **major units** (e.g. `"10.50"`), never a JSON float.
-- **CurrencyCode:** ISO 4217 uppercase string (branded/type alias). MVP does not restrict the set in the type system beyond non-empty uppercase pattern documentation; runtime validation belongs to later API tickets.
-- **Single currency coherence (assumed for MVP panels):** a budget home / dashboard / debts panel response declares a panel `currency` (or per-row Money); clients must not sum Money with different currencies without an explicit FX contract (FX conversion helpers are out of scope here — only the Money shape).
+- **CurrencyCode:** branded ISO 4217 uppercase string (`string & { readonly __brand: 'CurrencyCode' }`). MVP does not close the set in the type system; construct via assertion only after validation (`value as CurrencyCode`). Empty/lowercase must not be asserted. Runtime validation belongs to later API tickets.
+- **Single currency coherence (assumed for budget/dashboard panels):** budget home / dashboard responses declare a panel `currency` (plus per-field Money). Debts panel is multi-currency: totals are `totalsByCurrency` (no cross-currency aggregate). Clients must not sum Money with different currencies without an explicit FX contract (FX helpers out of scope here).
 - **Ids:** opaque `string` (UUID expected at runtime).
-- **Budget month:** `export type BudgetMonth = string` with runtime/format rule `YYYY-MM` (documented in ref). Do not invent a fragile template-literal brand in this ticket.
+- **Budget month:** branded `BudgetMonth` (`string & { readonly __brand: 'BudgetMonth' }`) with runtime/format rule `YYYY-MM` (documented in ref). Do **not** use a fragile template-literal brand; construct via assertion after validation.
 - **Auth session:** discriminated `authenticated: true | false`; when true, includes user id, email, displayName, `baseCurrency`. Include `LogoutResponse = { ok: true }` for the logout action contract.
 - **Errors:** clients may rely on `message` always; machine `code?: string` (free-form in MVP; domain tickets may later introduce string-union aliases) and `fields?: Record<string, string[]>` when the API supplies them. HTTP status remains in `statusCode`.
 - **Compatibility:** adding optional `code`/`fields` must not break existing health/observability tests that only assert `statusCode`/`message`.
@@ -123,7 +123,7 @@ Shape rules (exact fields locked here so implementers do not guess):
 
 **Money**
 ```ts
-type CurrencyCode = string; // ISO 4217 uppercase, e.g. "BRL"
+type CurrencyCode = string & { readonly __brand: 'CurrencyCode' }; // uppercase ISO 4217, e.g. "BRL"
 type Money = { amount: string; currency: CurrencyCode };
 ```
 
@@ -142,7 +142,7 @@ type ApiErrorBody = {
 `AuthSessionUser`: `{ id; email; displayName: string | null; baseCurrency: CurrencyCode }`  
 `LoginRequest`: `{ email; password }` · `SignupRequest`: `{ email; password; displayName?: string; baseCurrency: CurrencyCode }` · `LogoutResponse`: `{ ok: true }`
 
-**BudgetHomeResponse** — one-shot panel feed: `{ month: BudgetMonth; currency: CurrencyCode; readyToAssign: Money; totals: { income: Money; assigned: Money; spent: Money; available: Money; overspent: Money }; groups: BudgetGroup[] }`  
+**BudgetHomeResponse** — one-shot panel feed: `{ month: BudgetMonth; currency: CurrencyCode; readyToAssign: Money; totals: { income: Money; assigned: Money; spent: Money; available: Money; overspentAmount: Money }; groups: BudgetGroup[] }`  
 `BudgetGroup`: `{ id; name; categories: BudgetCategoryLine[] }`  
 `BudgetCategoryLine`: `{ id; name; assigned: Money; spent: Money; available: Money; overspent: boolean }`
 
@@ -154,18 +154,18 @@ type ApiErrorBody = {
 
 **Transactions (txn/posting view)**: `BudgetTransaction { id; month; categoryId; note: string | null; amount: Money; occurredOn: string; postingId: string }` + create/update + `DeleteTransactionResponse { id; reversedPostingId: string | null }` + list response. `postingId` makes the ledger link explicit without exposing journal internals.
 
-**DebtsPanelResponse**: `{ currency: CurrencyCode; totals: { principal: Money; balance: Money }; debts: DebtSummary[] }`  
+**DebtsPanelResponse**: `{ totalsByCurrency: Array<{ currency: CurrencyCode; principal: Money; balance: Money }>; debts: DebtSummary[] }`  
 `DebtSummary`: `{ id; name; status: 'active' | 'paid' | 'archived'; principal: Money; balance: Money }`  
 `DebtDetail` extends summary with `{ notes: string | null; openedOn: string | null; dueOn: string | null }`  
 `RegisterDebtPaymentRequest`: `{ amount: Money; occurredOn: string; note?: string }` → response includes updated `DebtDetail` + `postingId`
 
-**ProjectionResponse**: `{ currency: CurrencyCode; horizonMonths: number; assumptions: { includeBudgetAssigned: boolean; includeDebts: boolean; note: string }; points: ProjectionMonthPoint[] }`  
+**ProjectionResponse**: `{ currency: CurrencyCode; horizonMonths: ProjectionHorizonMonths; assumptions: { includeBudgetAssigned: boolean; includeDebts: boolean; note: string }; points: ProjectionMonthPoint[] }`  
 `ProjectionMonthPoint`: `{ month: BudgetMonth; income: Money; expenses: Money; debtPayments: Money; net: Money; projectedBalance: Money }`  
-`ProjectionQuery`: `{ horizonMonths: 3 | 6 | 12; currency?: CurrencyCode }`
+`ProjectionQuery`: `{ horizonMonths: ProjectionHorizonMonths; currency?: CurrencyCode }` where `ProjectionHorizonMonths = 3 | 6 | 12`
 
 **DashboardResponse**: `{ month: BudgetMonth; currency: CurrencyCode; income: Money; assigned: Money; spent: Money; readyToAssign: Money; overspent: boolean; byGroup: { groupId; name; assigned: Money; spent: Money }[] }`
 
-`AllExceptionsFilter` must forward `code` and `fields` when the HttpException response object includes them (string `code`, object `fields` with string[] values); omit keys when absent (same style as optional `error`).
+`AllExceptionsFilter` must forward `code` and `fields` when the HttpException response object includes them (string `code`, non-empty object `fields` with string[] values); omit keys when absent or when `fields` is `{}` (same style as optional `error`).
 
 No new Nest feature modules/routes in this ticket.
 
@@ -235,7 +235,7 @@ Regression checks:
   3. Error filter forwards `code`/`fields` when provided
   4. Error filter omits `code`/`fields` when absent (backward compatible)
 - **Variações de entrada:** HttpException string body vs object body vs object with partial `code`/`fields`; invalid `fields` types ignored/omitted
-- **Bordas relevantes:** empty `fields` object; `message` as string[]; Money amount `"0"`; multi-currency distinct Money rows in debts list
+- **Bordas relevantes:** empty `fields` object omitted from response; `message` as string[]; Money amount `"0"`; multi-currency debts via `totalsByCurrency`
 - **Transições de estado:** N/A (no domain state machine)
 - **Invariantes de domínio:** no monetary field without currency; passwords never on session response types
 - **Riscos cobertos por teste:** drift of export surface → contracts/web typecheck; error shape regression → filter spec

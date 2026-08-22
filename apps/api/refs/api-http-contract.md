@@ -1,6 +1,6 @@
 # API — HTTP contract
 
-> **Status:** stable · **Reviewed:** 2026-08-22 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
+> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -108,7 +108,7 @@ or error.
 | Thrown | `statusCode` | `message` | `error` | `code` / `fields` |
 |---|---|---|---|---|
 | `HttpException`, string response | its status | the string | exception class name | omitted |
-| `HttpException`, object response | its status | `message` from the payload (string or string[]), else `exception.message` | `error` from the payload, else class name | `code` when it is a string; `fields` when it is `Record<string, string[]>`; malformed values omitted |
+| `HttpException`, object response | its status | `message` from the payload (string or string[]), else `exception.message` | `error` from the payload, else class name | `code` when it is a string; `fields` when it is a non-empty `Record<string, string[]>`; malformed or empty `{}` omitted |
 | anything else | `500` | `'Internal server error'` | `'Internal Server Error'` | omitted |
 
 Logging, via the Nest `Logger`: `` `${method} ${path} ${statusCode} requestId=… ${message}` `` —

@@ -1,6 +1,6 @@
 import type { CurrencyCode, Money } from './money.js';
 
-export type BudgetMonth = string;
+export type BudgetMonth = string & { readonly __brand: 'BudgetMonth' };
 
 export type BudgetCategoryLine = {
   id: string;
@@ -26,7 +26,7 @@ export type BudgetHomeResponse = {
     assigned: Money;
     spent: Money;
     available: Money;
-    overspent: Money;
+    overspentAmount: Money;
   };
   groups: BudgetGroup[];
 };

@@ -1,6 +1,6 @@
 # Monorepo — Shared contracts
 
-> **Status:** stable · **Reviewed:** 2026-08-22 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
+> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
 
 > **Altitude:** repo ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -26,14 +26,14 @@ source of truth and web proves consumption via typed fixtures.
 | `ReadinessStatus` | `packages/contracts/src/readiness.ts` | `'ready' \| 'not_ready'` |
 | `DependencyStatus` | `packages/contracts/src/readiness.ts` | `'up' \| 'down'` |
 | `ReadinessResponse` | `packages/contracts/src/readiness.ts` | `{ status; dependencies: { database } }` |
-| `CurrencyCode`, `Money` | `packages/contracts/src/money.ts` | `Money = { amount: string; currency: CurrencyCode }` (decimal major units) |
+| `CurrencyCode`, `Money` | `packages/contracts/src/money.ts` | Branded `CurrencyCode` (uppercase ISO 4217); `Money = { amount: string; currency: CurrencyCode }` (decimal major units) |
 | Auth session / login / signup / logout | `packages/contracts/src/auth.ts` | Discriminated `AuthSessionResponse`; request/response action types |
-| Budget home / assign / move-money | `packages/contracts/src/budget.ts` | Panel view-model + assign/move-money actions; `BudgetMonth` is `YYYY-MM` string |
+| Budget home / assign / move-money | `packages/contracts/src/budget.ts` | Panel view-model + assign/move-money; branded `BudgetMonth` (`YYYY-MM`); boolean `overspent` on lines; monetary `overspentAmount` on totals |
 | Income | `packages/contracts/src/income.ts` | Entry + create/update + list |
 | Txn / posting view | `packages/contracts/src/transaction.ts` | Transaction with `postingId` + create/update/delete/list |
-| Debts panel | `packages/contracts/src/debts.ts` | Panel list/totals + create + register payment |
-| Projection | `packages/contracts/src/projection.ts` | Horizon query + series with explicit `assumptions` |
-| Dashboard | `packages/contracts/src/dashboard.ts` | Month summary + `byGroup` breakdown |
+| Debts panel | `packages/contracts/src/debts.ts` | Panel list + `totalsByCurrency[]` (no single panel currency) + create + register payment |
+| Projection | `packages/contracts/src/projection.ts` | Horizon query + series; `horizonMonths` is `ProjectionHorizonMonths` (`3\|6\|12`) on query and response |
+| Dashboard | `packages/contracts/src/dashboard.ts` | Month summary + boolean `overspent` + `byGroup` breakdown |
 
 `packages/contracts/src/index.ts` is the only entry point and re-exports everything.
 
@@ -63,5 +63,17 @@ Panel Nest DTOs are **not** wired yet — they arrive with the endpoint tickets 
   `implements` the contract type so a drift fails typecheck (see
   `apps/api/refs/api-http-contract.md`).
 - **Money always carries currency.** No bare numeric money fields in contracts.
+- **`CurrencyCode` is branded.** Values are uppercase ISO 4217 (e.g. `BRL`, `USD`). Construct only
+  after validation at an API/boundary with an assertion (`value as CurrencyCode`); do not assert
+  empty or lowercase strings. The set is not closed in the type system (MVP).
+- **`BudgetMonth` is branded `YYYY-MM`.** Same construction rule (`value as BudgetMonth`); not a
+  template-literal brand. Runtime format checks belong to later API tickets.
+- **`overspent` vs `overspentAmount`.** Boolean flags stay named `overspent` (category line,
+  dashboard). The budget-home monetary total is `overspentAmount: Money`.
+- **Debts panel totals are per currency.** `DebtsPanelResponse.totalsByCurrency` is
+  `Array<{ currency; principal; balance }>` (each Money still carries its own currency). There is
+  no single panel `currency` / aggregated cross-currency total — clients must not sum across
+  currencies without an FX contract.
 - **`ApiErrorBody.code` / `fields` are optional.** The exception filter includes them only when
-  `code` is a string and `fields` is `Record<string, string[]>`; malformed values are omitted.
+  `code` is a string and `fields` is a non-empty `Record<string, string[]>`; malformed or empty
+  `{}` values are omitted.

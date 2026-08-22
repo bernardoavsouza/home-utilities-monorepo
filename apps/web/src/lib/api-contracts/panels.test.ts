@@ -33,8 +33,17 @@ describe('api-contracts panel fixtures', () => {
   });
 
   it('exposes debts, projection, and dashboard panels', () => {
+    expect(exampleDebtsPanel.totalsByCurrency).toHaveLength(1);
     expect(exampleDebtsPanel.debts).toHaveLength(1);
+    expect(exampleProjection.horizonMonths).toBe(3);
     expect(exampleProjection.points).toHaveLength(1);
+    expect(exampleDashboard.overspent).toBe(false);
     expect(exampleDashboard.byGroup).toHaveLength(1);
   });
+
+  it('keeps budget overspent boolean distinct from overspentAmount money', () => {
+    expect(exampleBudgetHome.totals.overspentAmount.amount).toBe('0.00');
+    expect(exampleBudgetHome.groups[0]?.categories[0]?.overspent).toBe(false);
+  });
 });
+

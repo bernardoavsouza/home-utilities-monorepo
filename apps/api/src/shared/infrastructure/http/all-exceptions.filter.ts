@@ -103,7 +103,7 @@ function parseErrorFields(
 
   const entries = Object.entries(value as Record<string, unknown>);
   if (entries.length === 0) {
-    return {};
+    return undefined;
   }
 
   const fields: Record<string, string[]> = {};

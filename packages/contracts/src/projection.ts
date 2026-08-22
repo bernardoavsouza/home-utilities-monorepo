@@ -19,7 +19,7 @@ export type ProjectionMonthPoint = {
 
 export type ProjectionResponse = {
   currency: CurrencyCode;
-  horizonMonths: number;
+  horizonMonths: ProjectionHorizonMonths;
   assumptions: {
     includeBudgetAssigned: boolean;
     includeDebts: boolean;

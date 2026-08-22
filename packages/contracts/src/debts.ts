@@ -16,12 +16,14 @@ export type DebtDetail = DebtSummary & {
   dueOn: string | null;
 };
 
-export type DebtsPanelResponse = {
+export type DebtsPanelCurrencyTotals = {
   currency: CurrencyCode;
-  totals: {
-    principal: Money;
-    balance: Money;
-  };
+  principal: Money;
+  balance: Money;
+};
+
+export type DebtsPanelResponse = {
+  totalsByCurrency: DebtsPanelCurrencyTotals[];
   debts: DebtSummary[];
 };
 

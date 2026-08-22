@@ -41,6 +41,7 @@ export type {
   DebtDetail,
   DebtStatus,
   DebtSummary,
+  DebtsPanelCurrencyTotals,
   DebtsPanelResponse,
   RegisterDebtPaymentRequest,
   RegisterDebtPaymentResponse,

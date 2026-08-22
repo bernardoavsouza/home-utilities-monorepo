@@ -88,4 +88,24 @@ describe('AllExceptionsFilter', () => {
     expect(body.code).toBeUndefined();
     expect(body.fields).toBeUndefined();
   });
+
+  it('omits empty fields objects', () => {
+    const filter = new AllExceptionsFilter();
+    const { host, response } = createHost();
+
+    filter.catch(
+      new HttpException(
+        {
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: 'Bad payload',
+          fields: {},
+        },
+        HttpStatus.BAD_REQUEST,
+      ),
+      host,
+    );
+
+    const body = response.json.mock.calls[0]?.[0] as ApiErrorBody;
+    expect(body.fields).toBeUndefined();
+  });
 });

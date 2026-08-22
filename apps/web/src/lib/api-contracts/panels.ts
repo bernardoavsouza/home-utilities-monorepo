@@ -3,10 +3,12 @@ import type {
   AssignCategoryResponse,
   AuthSessionResponse,
   BudgetHomeResponse,
+  BudgetMonth,
   BudgetTransaction,
   CreateDebtRequest,
   CreateIncomeRequest,
   CreateTransactionRequest,
+  CurrencyCode,
   DashboardResponse,
   DebtsPanelResponse,
   DeleteTransactionResponse,
@@ -23,10 +25,14 @@ import type {
   TransactionListResponse,
 } from '@packages/contracts';
 
-export const exampleMoney = {
-  amount: '10.50',
-  currency: 'BRL',
-} satisfies Money;
+const asCurrency = (code: string): CurrencyCode => code as CurrencyCode;
+const asMonth = (value: string): BudgetMonth => value as BudgetMonth;
+const money = (amount: string, code = 'BRL'): Money => ({
+  amount,
+  currency: asCurrency(code),
+});
+
+export const exampleMoney = money('10.50');
 
 export const exampleAuthSession = {
   authenticated: true,
@@ -34,7 +40,7 @@ export const exampleAuthSession = {
     id: '00000000-0000-0000-0000-000000000001',
     email: 'dev@example.com',
     displayName: 'Dev',
-    baseCurrency: 'BRL',
+    baseCurrency: asCurrency('BRL'),
   },
 } satisfies AuthSessionResponse;
 
@@ -52,25 +58,26 @@ export const exampleSignupRequest = {
   email: 'dev@example.com',
   password: 'secret',
   displayName: 'Dev',
-  baseCurrency: 'BRL',
+  baseCurrency: asCurrency('BRL'),
 } satisfies SignupRequest;
 
 export const exampleLogoutResponse = {
   ok: true,
 } satisfies LogoutResponse;
 
-const zero = { amount: '0.00', currency: 'BRL' } satisfies Money;
+const zero = money('0.00');
+const month = asMonth('2026-08');
 
 export const exampleBudgetHome = {
-  month: '2026-08',
-  currency: 'BRL',
-  readyToAssign: { amount: '100.00', currency: 'BRL' },
+  month,
+  currency: asCurrency('BRL'),
+  readyToAssign: money('100.00'),
   totals: {
-    income: { amount: '500.00', currency: 'BRL' },
-    assigned: { amount: '400.00', currency: 'BRL' },
-    spent: { amount: '120.00', currency: 'BRL' },
-    available: { amount: '280.00', currency: 'BRL' },
-    overspent: zero,
+    income: money('500.00'),
+    assigned: money('400.00'),
+    spent: money('120.00'),
+    available: money('280.00'),
+    overspentAmount: zero,
   },
   groups: [
     {
@@ -80,9 +87,9 @@ export const exampleBudgetHome = {
         {
           id: 'cat-1',
           name: 'Groceries',
-          assigned: { amount: '400.00', currency: 'BRL' },
-          spent: { amount: '120.00', currency: 'BRL' },
-          available: { amount: '280.00', currency: 'BRL' },
+          assigned: money('400.00'),
+          spent: money('120.00'),
+          available: money('280.00'),
           overspent: false,
         },
       ],
@@ -91,21 +98,21 @@ export const exampleBudgetHome = {
 } satisfies BudgetHomeResponse;
 
 export const exampleAssignRequest = {
-  month: '2026-08',
+  month,
   categoryId: 'cat-1',
-  amount: { amount: '50.00', currency: 'BRL' },
+  amount: money('50.00'),
 } satisfies AssignCategoryRequest;
 
 export const exampleAssignResponse = {
   category: exampleBudgetHome.groups[0]!.categories[0]!,
-  readyToAssign: { amount: '50.00', currency: 'BRL' },
+  readyToAssign: money('50.00'),
 } satisfies AssignCategoryResponse;
 
 export const exampleMoveMoneyRequest = {
-  month: '2026-08',
+  month,
   fromCategoryId: 'cat-1',
   toCategoryId: 'cat-2',
-  amount: { amount: '20.00', currency: 'BRL' },
+  amount: money('20.00'),
 } satisfies MoveMoneyRequest;
 
 export const exampleMoveMoneyResponse = {
@@ -113,57 +120,57 @@ export const exampleMoveMoneyResponse = {
   to: {
     id: 'cat-2',
     name: 'Transport',
-    assigned: { amount: '20.00', currency: 'BRL' },
+    assigned: money('20.00'),
     spent: zero,
-    available: { amount: '20.00', currency: 'BRL' },
+    available: money('20.00'),
     overspent: false,
   },
-  readyToAssign: { amount: '50.00', currency: 'BRL' },
+  readyToAssign: money('50.00'),
 } satisfies MoveMoneyResponse;
 
 export const exampleCreateIncome = {
-  month: '2026-08',
+  month,
   note: 'Salary',
-  amount: { amount: '500.00', currency: 'BRL' },
+  amount: money('500.00'),
   occurredOn: '2026-08-01',
 } satisfies CreateIncomeRequest;
 
 export const exampleIncomeList = {
-  month: '2026-08',
+  month,
   items: [
     {
       id: 'inc-1',
-      month: '2026-08',
+      month,
       note: 'Salary',
-      amount: { amount: '500.00', currency: 'BRL' },
+      amount: money('500.00'),
       occurredOn: '2026-08-01',
     },
   ],
-  total: { amount: '500.00', currency: 'BRL' },
+  total: money('500.00'),
 } satisfies IncomeListResponse;
 
 export const exampleCreateTransaction = {
-  month: '2026-08',
+  month,
   categoryId: 'cat-1',
   note: 'Market',
-  amount: { amount: '40.00', currency: 'BRL' },
+  amount: money('40.00'),
   occurredOn: '2026-08-10',
 } satisfies CreateTransactionRequest;
 
 export const exampleTransaction = {
   id: 'txn-1',
-  month: '2026-08',
+  month,
   categoryId: 'cat-1',
   note: 'Market',
-  amount: { amount: '40.00', currency: 'BRL' },
+  amount: money('40.00'),
   occurredOn: '2026-08-10',
   postingId: 'post-1',
 } satisfies BudgetTransaction;
 
 export const exampleTransactionList = {
-  month: '2026-08',
+  month,
   items: [exampleTransaction],
-  total: { amount: '40.00', currency: 'BRL' },
+  total: money('40.00'),
 } satisfies TransactionListResponse;
 
 export const exampleDeleteTransaction = {
@@ -172,30 +179,32 @@ export const exampleDeleteTransaction = {
 } satisfies DeleteTransactionResponse;
 
 export const exampleDebtsPanel = {
-  currency: 'BRL',
-  totals: {
-    principal: { amount: '1000.00', currency: 'BRL' },
-    balance: { amount: '750.00', currency: 'BRL' },
-  },
+  totalsByCurrency: [
+    {
+      currency: asCurrency('BRL'),
+      principal: money('1000.00'),
+      balance: money('750.00'),
+    },
+  ],
   debts: [
     {
       id: 'debt-1',
       name: 'Card',
       status: 'active',
-      principal: { amount: '1000.00', currency: 'BRL' },
-      balance: { amount: '750.00', currency: 'BRL' },
+      principal: money('1000.00'),
+      balance: money('750.00'),
     },
   ],
 } satisfies DebtsPanelResponse;
 
 export const exampleCreateDebt = {
   name: 'Card',
-  principal: { amount: '1000.00', currency: 'BRL' },
-  balance: { amount: '1000.00', currency: 'BRL' },
+  principal: money('1000.00'),
+  balance: money('1000.00'),
 } satisfies CreateDebtRequest;
 
 export const exampleRegisterDebtPayment = {
-  amount: { amount: '50.00', currency: 'BRL' },
+  amount: money('50.00'),
   occurredOn: '2026-08-15',
   note: 'Extra payment',
 } satisfies RegisterDebtPaymentRequest;
@@ -205,8 +214,8 @@ export const exampleRegisterDebtPaymentResponse = {
     id: 'debt-1',
     name: 'Card',
     status: 'active',
-    principal: { amount: '1000.00', currency: 'BRL' },
-    balance: { amount: '700.00', currency: 'BRL' },
+    principal: money('1000.00'),
+    balance: money('700.00'),
     notes: null,
     openedOn: '2026-01-01',
     dueOn: null,
@@ -215,7 +224,7 @@ export const exampleRegisterDebtPaymentResponse = {
 } satisfies RegisterDebtPaymentResponse;
 
 export const exampleProjection = {
-  currency: 'BRL',
+  currency: asCurrency('BRL'),
   horizonMonths: 3,
   assumptions: {
     includeBudgetAssigned: true,
@@ -224,30 +233,30 @@ export const exampleProjection = {
   },
   points: [
     {
-      month: '2026-09',
-      income: { amount: '500.00', currency: 'BRL' },
-      expenses: { amount: '400.00', currency: 'BRL' },
-      debtPayments: { amount: '50.00', currency: 'BRL' },
-      net: { amount: '50.00', currency: 'BRL' },
-      projectedBalance: { amount: '50.00', currency: 'BRL' },
+      month: asMonth('2026-09'),
+      income: money('500.00'),
+      expenses: money('400.00'),
+      debtPayments: money('50.00'),
+      net: money('50.00'),
+      projectedBalance: money('50.00'),
     },
   ],
 } satisfies ProjectionResponse;
 
 export const exampleDashboard = {
-  month: '2026-08',
-  currency: 'BRL',
-  income: { amount: '500.00', currency: 'BRL' },
-  assigned: { amount: '400.00', currency: 'BRL' },
-  spent: { amount: '120.00', currency: 'BRL' },
-  readyToAssign: { amount: '100.00', currency: 'BRL' },
+  month,
+  currency: asCurrency('BRL'),
+  income: money('500.00'),
+  assigned: money('400.00'),
+  spent: money('120.00'),
+  readyToAssign: money('100.00'),
   overspent: false,
   byGroup: [
     {
       groupId: 'group-1',
       name: 'Essentials',
-      assigned: { amount: '400.00', currency: 'BRL' },
-      spent: { amount: '120.00', currency: 'BRL' },
+      assigned: money('400.00'),
+      spent: money('120.00'),
     },
   ],
 } satisfies DashboardResponse;
