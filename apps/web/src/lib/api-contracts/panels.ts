@@ -182,8 +182,8 @@ export const exampleDebtsPanel = {
   totalsByCurrency: [
     {
       currency: asCurrency('BRL'),
-      principal: money('1000.00'),
-      balance: money('750.00'),
+      principal: '1000.00',
+      balance: '750.00',
     },
   ],
   debts: [

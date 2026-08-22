@@ -1,6 +1,6 @@
 # Monorepo — Shared contracts
 
-> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
+> **Status:** stable · **Reviewed:** 2026-08-22 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
 
 > **Altitude:** repo ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -71,9 +71,10 @@ Panel Nest DTOs are **not** wired yet — they arrive with the endpoint tickets 
 - **`overspent` vs `overspentAmount`.** Boolean flags stay named `overspent` (category line,
   dashboard). The budget-home monetary total is `overspentAmount: Money`.
 - **Debts panel totals are per currency.** `DebtsPanelResponse.totalsByCurrency` is
-  `Array<{ currency; principal; balance }>` (each Money still carries its own currency). There is
-  no single panel `currency` / aggregated cross-currency total — clients must not sum across
-  currencies without an FX contract.
+  `Array<{ currency; principal; balance }>` where `principal` / `balance` are decimal strings in
+  major units (same as `Money.amount`) under that row's single `currency` — not nested `Money`,
+  so currency cannot drift. There is no single panel `currency` / aggregated cross-currency total —
+  clients must not sum across currencies without an FX contract.
 - **`ApiErrorBody.code` / `fields` are optional.** The exception filter includes them only when
   `code` is a string and `fields` is a non-empty `Record<string, string[]>`; malformed or empty
   `{}` values are omitted.

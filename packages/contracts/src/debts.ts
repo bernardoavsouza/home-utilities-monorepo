@@ -18,8 +18,8 @@ export type DebtDetail = DebtSummary & {
 
 export type DebtsPanelCurrencyTotals = {
   currency: CurrencyCode;
-  principal: Money;
-  balance: Money;
+  principal: string;
+  balance: string;
 };
 
 export type DebtsPanelResponse = {

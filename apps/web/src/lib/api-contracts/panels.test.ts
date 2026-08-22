@@ -34,6 +34,8 @@ describe('api-contracts panel fixtures', () => {
 
   it('exposes debts, projection, and dashboard panels', () => {
     expect(exampleDebtsPanel.totalsByCurrency).toHaveLength(1);
+    expect(exampleDebtsPanel.totalsByCurrency[0]?.principal).toBe('1000.00');
+    expect(exampleDebtsPanel.totalsByCurrency[0]?.balance).toBe('750.00');
     expect(exampleDebtsPanel.debts).toHaveLength(1);
     expect(exampleProjection.horizonMonths).toBe(3);
     expect(exampleProjection.points).toHaveLength(1);

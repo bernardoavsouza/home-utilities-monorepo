@@ -85,7 +85,7 @@ Out of scope:
 ## Business rules / invariants
 
 - **Panel orientation:** types describe UI/API panel payloads and actions, not raw CRUD tables.
-- **Money:** every monetary field is `Money = { amount: string; currency: CurrencyCode }`. No bare `number` money. `amount` is a decimal string in **major units** (e.g. `"10.50"`), never a JSON float.
+- **Money:** every monetary field is `Money = { amount: string; currency: CurrencyCode }`, except `DebtsPanelCurrencyTotals.principal` / `balance` which are decimal strings under the row's single `currency` (avoids nested-currency drift). No bare `number` money. `Money.amount` is a decimal string in **major units** (e.g. `"10.50"`), never a JSON float.
 - **CurrencyCode:** branded ISO 4217 uppercase string (`string & { readonly __brand: 'CurrencyCode' }`). MVP does not close the set in the type system; construct via assertion only after validation (`value as CurrencyCode`). Empty/lowercase must not be asserted. Runtime validation belongs to later API tickets.
 - **Single currency coherence (assumed for budget/dashboard panels):** budget home / dashboard responses declare a panel `currency` (plus per-field Money). Debts panel is multi-currency: totals are `totalsByCurrency` (no cross-currency aggregate). Clients must not sum Money with different currencies without an explicit FX contract (FX helpers out of scope here).
 - **Ids:** opaque `string` (UUID expected at runtime).
@@ -154,7 +154,9 @@ type ApiErrorBody = {
 
 **Transactions (txn/posting view)**: `BudgetTransaction { id; month; categoryId; note: string | null; amount: Money; occurredOn: string; postingId: string }` + create/update + `DeleteTransactionResponse { id; reversedPostingId: string | null }` + list response. `postingId` makes the ledger link explicit without exposing journal internals.
 
-**DebtsPanelResponse**: `{ totalsByCurrency: Array<{ currency: CurrencyCode; principal: Money; balance: Money }>; debts: DebtSummary[] }`  
+**DebtsPanelResponse**: `{ totalsByCurrency: Array<{ currency: CurrencyCode; principal: string; balance: string }>; debts: DebtSummary[] }`  
+`DebtsPanelCurrencyTotals.principal` / `balance` are decimal strings in major units (same as `Money.amount`) under the row `currency` — not nested `Money`, so currency cannot drift.  
+
 `DebtSummary`: `{ id; name; status: 'active' | 'paid' | 'archived'; principal: Money; balance: Money }`  
 `DebtDetail` extends summary with `{ notes: string | null; openedOn: string | null; dueOn: string | null }`  
 `RegisterDebtPaymentRequest`: `{ amount: Money; occurredOn: string; note?: string }` → response includes updated `DebtDetail` + `postingId`
@@ -203,7 +205,7 @@ N/A.
 ## Acceptance criteria
 
 - [ ] `@packages/contracts` exports typed contracts for: auth session, money+currency, budget home, assign, income, txn/posting, move-money, debts panel, projection, dashboard
-- [ ] Every monetary field in those contracts uses `Money` (amount string + currency)
+- [ ] Every monetary field in those contracts uses `Money` (amount string + currency), except debts `totalsByCurrency` amounts which are decimal strings under a single row `currency`
 - [ ] `ApiErrorBody` includes `code` and `fields` (optional keys; documented); filter forwards them when present
 - [ ] `apps/web` typechecks modules that consume those panel types with **no** `any` on the panel payloads
 - [ ] `refs/monorepo-contracts.md` updated; `Reviewed:` bumped; error section in `api-http-contract.md` updated
