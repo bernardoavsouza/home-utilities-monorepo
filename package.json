@@ -1,0 +1,28 @@
+{
+  "name": "monorepo-boilerplate",
+  "private": true,
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=26 <27",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "prisma:generate": "pnpm --filter api prisma:generate",
+    "db:migrate": "pnpm --filter api db:migrate && pnpm --filter api db:migrate:test",
+    "db:seed": "pnpm --filter api db:seed",
+    "db:reset": "pnpm --filter api db:reset"
+  },
+
+  "devDependencies": {
+    "only-allow": "^1.2.2",
+    "turbo": "^2.5.4"
+  }
+}

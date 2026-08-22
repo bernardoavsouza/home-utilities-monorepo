@@ -1,0 +1,33 @@
+name: API checks
+
+# Pull requests targeting main only — there is no push trigger.
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: api · lint · typecheck · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      # Prisma's generated client is a typecheck input, so it comes first.
+      - name: Prisma generate
+        run: pnpm prisma:generate
+
+      # `--filter=api` keeps the task graph, so `@packages/contracts#typecheck`
+      # still runs as an upstream dependency — contracts needs no workflow of its own.
+      - name: Lint
+        run: pnpm exec turbo run lint --filter=api
+
+      - name: Typecheck
+        run: pnpm exec turbo run typecheck --filter=api
+
+      - name: Build
+        run: pnpm exec turbo run build --filter=api

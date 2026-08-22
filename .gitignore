@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Test & coverage
+coverage/
+.nyc_output/
+playwright-report/
+playwright/.cache/
+test-results/
+blob-report/
+
+# Environment (per-app templates only)
+.env
+.env.*
+apps/*/.env
+apps/*/.env.*
+!apps/*/.env.example
+!apps/api/.env.test
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Prisma
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+
+# Docker / local runtime
+*.pid
+*.seed
+*.pid.lock
+
+# Debug / profiling
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+*.tgz
+.npm
+.eslintcache
+.stylelintcache
+.cache/
+.parcel-cache/
+.vercel
+.next/cache/
+
+# AI / agent scratch
+.superpowers/
+.grok/

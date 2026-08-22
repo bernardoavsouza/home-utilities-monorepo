@@ -1,0 +1,35 @@
+# Shared by every app image. Docker reads .dockerignore from the build CONTEXT
+# root, and both apps build from the repo root (`docker build -f apps/<app>/Dockerfile .`),
+# so this file must stay app-agnostic: each Dockerfile COPYs only what it ships.
+
+# Dependencies & build
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/out
+**/.turbo
+**/*.tsbuildinfo
+
+# Tests & coverage
+**/coverage
+**/playwright-report
+**/test-results
+**/blob-report
+**/e2e
+
+# Git & env — neither image reads a .env file; the API takes its vars from the
+# runtime environment and the web app bakes NEXT_PUBLIC_* in at build time
+# (see refs/monorepo-docker-images.md).
+.git
+.gitignore
+.env
+.env.*
+
+# Docs & IDE
+docs
+**/*.md
+.vscode
+.idea
+.superpowers
+.DS_Store
