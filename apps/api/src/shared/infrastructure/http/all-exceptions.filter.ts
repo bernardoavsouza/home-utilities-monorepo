@@ -19,11 +19,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<RequestWithId>();
 
-    const { statusCode, message, error } = this.resolveError(exception);
+    const { statusCode, message, error, code, fields } =
+      this.resolveError(exception);
     const body: ApiErrorBody = {
       statusCode,
       message,
       ...(error !== undefined ? { error } : {}),
+      ...(code !== undefined ? { code } : {}),
+      ...(fields !== undefined ? { fields } : {}),
     };
 
     const requestId = request.requestId;
@@ -63,8 +66,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
             : exception.message;
         const error =
           typeof payload.error === 'string' ? payload.error : exception.name;
+        const code =
+          typeof payload.code === 'string' ? payload.code : undefined;
+        const fields = parseErrorFields(payload.fields);
 
-        return { statusCode, message, error };
+        return {
+          statusCode,
+          message,
+          error,
+          ...(code !== undefined ? { code } : {}),
+          ...(fields !== undefined ? { fields } : {}),
+        };
       }
 
       return {
@@ -80,4 +92,29 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error: 'Internal Server Error',
     };
   }
+}
+
+function parseErrorFields(
+  value: unknown,
+): Record<string, string[]> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  const fields: Record<string, string[]> = {};
+  for (const [key, messages] of entries) {
+    if (
+      !Array.isArray(messages) ||
+      !messages.every((item) => typeof item === 'string')
+    ) {
+      return undefined;
+    }
+    fields[key] = messages;
+  }
+  return fields;
 }
