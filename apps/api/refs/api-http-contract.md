@@ -1,6 +1,6 @@
 # API — HTTP contract
 
-> **Status:** stable · **Reviewed:** 2026-08-20 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-22 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -103,13 +103,13 @@ or error.
 ## Error responses
 
 `AllExceptionsFilter` is `@Catch()` — it catches everything and always answers JSON shaped as
-`ApiErrorBody` (`{ statusCode, message, error? }`).
+`ApiErrorBody` (`{ statusCode, message, error?, code?, fields? }`).
 
-| Thrown | `statusCode` | `message` | `error` |
-|---|---|---|---|
-| `HttpException`, string response | its status | the string | exception class name |
-| `HttpException`, object response | its status | `message` from the payload (string or string[]), else `exception.message` | `error` from the payload, else class name |
-| anything else | `500` | `'Internal server error'` | `'Internal Server Error'` |
+| Thrown | `statusCode` | `message` | `error` | `code` / `fields` |
+|---|---|---|---|---|
+| `HttpException`, string response | its status | the string | exception class name | omitted |
+| `HttpException`, object response | its status | `message` from the payload (string or string[]), else `exception.message` | `error` from the payload, else class name | `code` when it is a string; `fields` when it is `Record<string, string[]>`; malformed values omitted |
+| anything else | `500` | `'Internal server error'` | `'Internal Server Error'` | omitted |
 
 Logging, via the Nest `Logger`: `` `${method} ${path} ${statusCode} requestId=… ${message}` `` —
 `error` **with the stack** when `statusCode >= 500`, `warn` otherwise. Unhandled internals never
