@@ -18,6 +18,9 @@ deploy. PR CI stays PR-only (`monorepo-ci.md`); image check workflows still buil
 | Tag whose commit is **not** on `origin/main` | no — fails closed before mutate |
 | Merge / push to `main` without a tag | **no** |
 
+CD concurrency serializes the same tag (`cancel-in-progress: false`) so a second run cannot kill a
+migrate / half-rolled deploy.
+
 ## Pipeline order
 
 | Step | What |
@@ -26,8 +29,9 @@ deploy. PR CI stays PR-only (`monorepo-ci.md`); image check workflows still buil
 | 2 | Build & push API image to GHCR |
 | 3 | One-shot `prisma migrate deploy` from that image against Neon |
 | 4 | Render deploy hook with `imgURL` = GHCR tag |
-| 5 | Vercel production deploy of web (native Next build) |
-| 6 | Smoke: API health + ready, then web home |
+| 5 | Smoke API (`/v1/health`, `/v1/health/ready`) with retries — covers rollout + cold start |
+| 6 | Vercel production deploy of web (native Next build) |
+| 7 | Smoke web home |
 
 Migrate is **never** the container `CMD` / startup — same contract as `monorepo-docker-images.md`.
 
@@ -71,8 +75,10 @@ GHA `packages:write` covers **push** only. Provider **pull** auth is a separate 
 
 | Setting | Rule |
 |---|---|
-| Root Directory | Repository root (uses committed `vercel.json`) |
-| Install / build | `vercel.json` — Corepack + `pnpm install --frozen-lockfile`; `turbo run build --filter=web` |
+| Root Directory (dashboard) | **`apps/web`** — required; `next.config.ts` and the Next app live there |
+| Config file | `apps/web/vercel.json` (not repo root) |
+| Install | `corepack enable && cd ../.. && pnpm install --frozen-lockfile --filter web...` |
+| Build | package `build` (`next build`) — no custom `outputDirectory` (Next owns the output) |
 | `NEXT_PUBLIC_API_URL` | Build-time: `${RENDER_API_URL}/v1` (trailing slash stripped from the API base) |
 | Git auto-deploy | **Disabled** — CD-owned |
 | Domains MVP | `*.vercel.app` (no custom domain in this ticket) |
@@ -94,7 +100,7 @@ CD does not roll back schema on later step failure — operator re-dispatches th
 
 | Check | Expect |
 |---|---|
-| `GET ${RENDER_API_URL}/v1/health` | `200` |
+| `GET ${RENDER_API_URL}/v1/health` | `200` (retries up to ~6 min — no fixed sleep before smoke) |
 | `GET ${RENDER_API_URL}/v1/health/ready` | `200` (not `503`) |
 | `GET ${VERCEL_WEB_URL}/` | `200` |
 
@@ -108,9 +114,8 @@ prove `NEXT_PUBLIC_API_URL`; the value is still set from `RENDER_API_URL` in the
 ## Anchors
 
 - `.github/workflows/cd.yml`
-- `vercel.json`
+- `apps/web/vercel.json`
 - `apps/api/Dockerfile` (migrate command; runtime image)
 - `refs/monorepo-ci.md` (PR CI vs CD)
 - `refs/monorepo-docker-images.md` (migrate separate from start; `NEXT_PUBLIC_*` build-time)
 - `refs/monorepo-env-secrets.md` (no root `.env`; per-app vars)
-)

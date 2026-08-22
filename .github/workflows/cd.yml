@@ -12,7 +12,7 @@ on:
 
 concurrency:
   group: cd-${{ github.workflow }}-${{ github.event.inputs.tag || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -117,9 +117,6 @@ jobs:
           esac
           curl -fsS -X POST "$URL"
 
-      - name: Wait for Render rollout
-        run: sleep 45
-
       - name: Smoke API health + ready
         run: |
           set -euo pipefail
@@ -128,10 +125,10 @@ jobs:
           smoke() {
             local path="$1"
             local i=1
-            while [ "$i" -le 18 ]; do
+            while [ "$i" -le 36 ]; do
               code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' "$BASE$path" || true)"
               if [ "$code" = "200" ]; then
-                echo "OK $path ($code)"
+                echo "OK $path ($code) after $i attempt(s)"
                 return 0
               fi
               echo "attempt $i: $path → $code"
@@ -172,10 +169,10 @@ jobs:
           WEB="${{ secrets.VERCEL_WEB_URL }}"
           WEB="${WEB%/}"
           i=1
-          while [ "$i" -le 12 ]; do
+          while [ "$i" -le 18 ]; do
             code="$(curl -sS -o /tmp/web-body -w '%{http_code}' "$WEB/" || true)"
             if [ "$code" = "200" ]; then
-              echo "OK web home ($code)"
+              echo "OK web home ($code) after $i attempt(s)"
               exit 0
             fi
             echo "attempt $i: web → $code"
