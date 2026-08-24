@@ -1,6 +1,6 @@
 # Monorepo — Tooling
 
-> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-24 · **Source:** monorepo-boilerplate@feat/PP-13-cd-deploy-tag-vercel-render-neon
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -16,6 +16,11 @@
 | Task runner | Turborepo `^2.5.4` | `turbo.json` |
 
 `engine-strict=true` means a wrong Node/pnpm fails the install, not just warns.
+
+**Exception — Vercel web:** builds/Functions on Vercel only support Node `20.x` / `22.x` / `24.x` (not 26).
+Production web uses `24.x` (`apps/web/package.json` `engines` + dashboard). The Vercel install
+command passes `--config.engine-strict=false` so the root `>=26 <27` pin does not fail that
+install. Local, CI, and Docker stay on 26 — see `monorepo-deploy.md`.
 
 ## Workspaces
 
