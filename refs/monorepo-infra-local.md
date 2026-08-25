@@ -39,7 +39,7 @@
 
 | # | Step | Detail |
 |---|---|---|
-| 1 | engines | Node major must be 26, pnpm major 11 — otherwise abort |
+| 1 | engines | Node and pnpm must satisfy the ranges read from root `engines` — otherwise abort |
 | 2 | env templates | copy `apps/{api,web}/.env.example` → `.env` when missing; never overwrite |
 | 3 | install | `pnpm install` |
 | 4 | Postgres | `docker compose up -d --wait` (blocks on the healthcheck), then ensure both databases |

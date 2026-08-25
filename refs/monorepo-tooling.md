@@ -1,6 +1,6 @@
 # Monorepo — Tooling
 
-> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-24 · **Source:** monorepo-boilerplate@feat/PP-13-cd-deploy-tag-vercel-render-neon
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -9,13 +9,18 @@
 
 | Thing | Value | Enforced by |
 |---|---|---|
-| Node | `>=26 <27` (`.nvmrc` → `26`) | `engines.node`, `engine-strict=true` in `.npmrc`, `scripts/bootstrap.mjs` |
+| Node | `>=24.19 <25` (`.nvmrc` → `24.19.0`) | `engines.node`, `engine-strict=true` in `.npmrc`, `scripts/bootstrap.mjs` |
 | Package manager | pnpm `>=11 <12`, pinned `pnpm@11.20.0` | `engines.pnpm`, `packageManager`, `scripts/bootstrap.mjs` |
 | npm / yarn | **blocked** | `preinstall: npx only-allow pnpm` |
 | TypeScript | `5.9.3`, pinned in every workspace | per-package `devDependencies` |
 | Task runner | Turborepo `^2.5.4` | `turbo.json` |
 
 `engine-strict=true` means a wrong Node/pnpm fails the install, not just warns.
+
+**Vercel web:** builds/Functions on Vercel only support Node `20.x` / `22.x` / `24.x`, and production web
+declares `24.x` (`apps/web/package.json` `engines` + dashboard) to select that runtime major. Since the
+repo pins Node 24, that is the same major as local/CI/Docker and the Vercel install needs no
+`engine-strict` escape hatch — see `monorepo-deploy.md`.
 
 ## Workspaces
 

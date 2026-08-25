@@ -19,12 +19,13 @@
 # costs ~120MB of image, and it is also what lets `prisma generate` run in the
 # stage that actually ships.
 
-FROM node:26-alpine AS base
+FROM node:24.19-alpine AS base
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-# Node 25+ images no longer bundle Corepack, so npm installs Corepack itself
-# (pinned). Keep this pin in lockstep with apps/web/Dockerfile — see
+# Node 24 still bundles Corepack, but npm installs a pinned copy anyway: both
+# images must resolve pnpm identically, and Node 25+ drops the bundled one.
+# Keep this pin in lockstep with apps/web/Dockerfile — see
 # refs/monorepo-docker-images.md. pnpm still comes from Corepack at the
 # `packageManager` version — the pnpm version is never spelled out here.
 RUN npm install --global corepack@0.35.0 && corepack enable

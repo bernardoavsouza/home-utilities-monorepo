@@ -1,6 +1,6 @@
 # Monorepo — Docker images
 
-> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-22 · **Source:** monorepo-boilerplate@feat/PP-13-cd-deploy-tag-vercel-render-neon
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -42,7 +42,7 @@ install. Only `--filter <app>...` is actually installed.
 | Rule | Why |
 |---|---|
 | pnpm comes from **Corepack**, at the `packageManager` version | the pnpm version is pinned in `package.json` and the CI action — a third copy in a Dockerfile would drift |
-| `npm` is used **only** to install Corepack itself, pinned | Node 25+ images no longer bundle Corepack; npm never installs project dependencies |
+| `npm` is used **only** to install Corepack itself, pinned | Node 24 still bundles Corepack, but the pin keeps both images identical and survives Node 25+, which drops it; npm never installs project dependencies |
 | Corepack pin is the **same** in both Dockerfiles (`corepack@0.35.0` today) | there is no shared base image; bump both together or they drift |
 | a manifests-only layer precedes the source copy | a source-only change must not re-resolve dependencies |
 | `USER node`, `NODE_ENV=production`, no shell wrapper in `CMD` | not root, and no init script to debug |
@@ -54,7 +54,7 @@ install. Only `--filter <app>...` is actually installed.
 
 | Stage | Does |
 |---|---|
-| `base` | `node:26-alpine` + Corepack/pnpm |
+| `base` | `node:24.19-alpine` + Corepack/pnpm |
 | `manifests` | manifests + lockfile + `.npmrc` |
 | `build` | full install, `prisma generate`, `nest build` |
 | `prod-deps` | `--prod` install, `prisma generate` — the node_modules that ships |
@@ -97,9 +97,9 @@ container healthcheck stays on `/v1/health`.
 
 | Stage | Does |
 |---|---|
-| `base` | `node:26-alpine` + Corepack/pnpm |
+| `base` | `node:24.19-alpine` + Corepack/pnpm |
 | `build` | manifests, `--filter web...` install, `next build` |
-| `runtime` | plain `node:26-alpine` — the standalone output only, **no pnpm, no install** |
+| `runtime` | plain `node:24.19-alpine` — the standalone output only, **no pnpm, no install** |
 
 The standalone output is what makes that runtime stage possible: Next emits a self-contained server
 with a traced, pruned `node_modules`. `outputFileTracingRoot` must point at the **monorepo root**, or
@@ -141,4 +141,6 @@ need no host toolchain setup (skip the shared setup action) and build via Buildx
 built rots; the first one in this repo did, which is why it was deleted before these were written.
 Keep the workflows.
 
-Nothing pushes an image: there is no deploy workflow (`monorepo-ci.md`).
+PR image workflows still build with `push: false`. **CD** (`.github/workflows/cd.yml`) pushes the
+API image to GHCR on tag `v*` — see `monorepo-deploy.md`. Web production deploys via Vercel’s
+native Next build, not the web Docker image.

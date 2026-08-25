@@ -4,14 +4,14 @@ pnpm monorepo scaffold: Next.js (`apps/web`) + NestJS (`apps/api`), with shared 
 
 ## Prerequisites
 
-- **Node 26** (see `.nvmrc`; e.g. 26.7.0 via nvm/fnm/asdf)
+- **Node 24.19.0** (see `.nvmrc`; via nvm/fnm/asdf)
 - **pnpm 11.20.0** (Corepack; `packageManager` field)
 - **Docker** (Postgres for local API / Prisma smoke tests)
 
 ## Setup
 
 ```bash
-nvm install && nvm use   # Node 26
+nvm install && nvm use   # Node 24.19.0
 corepack enable          # pnpm from packageManager
 pnpm bootstrap
 pnpm db:migrate   # apply versioned migrations (Postgres must be up)
@@ -121,7 +121,7 @@ CI builds both images on every PR, so neither Dockerfile can rot.
 
 ## Tooling notes
 
-- **Node** `>=26 <27`, **pnpm** `>=11 <12` (`engines` + `engine-strict=true` in `.npmrc`)
+- **Node** `>=24.19 <25`, **pnpm** `>=11 <12` (`engines` + `engine-strict=true` in `.npmrc`)
 - npm/yarn installs are blocked via `only-allow pnpm`
 - **TypeScript 5.9.3** (pinned; Next/Nest + typescript-eslint do not support TS 7 yet)
 - **Prisma 6.x** (not 7 — schema URL API)
@@ -134,8 +134,8 @@ CI builds both images on every PR, so neither Dockerfile can rot.
 
 Launch configs live in [`.vscode/launch.json`](.vscode/launch.json):
 
-- **API: Nest debug** — `pnpm --filter api start:debug` (Node 26)
-- **Web: Next dev** — `pnpm --filter web dev` (Node 26)
+- **API: Nest debug** — `pnpm --filter api start:debug` (Node 24)
+- **Web: Next dev** — `pnpm --filter web dev` (Node 24)
 
 ## Docs for agents
 
