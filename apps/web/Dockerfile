@@ -14,12 +14,13 @@
 #   docker build -f apps/web/Dockerfile \
 #     --build-arg NEXT_PUBLIC_API_URL=https://api.example.com/v1 -t <tag> .
 
-FROM node:26-alpine AS base
+FROM node:24.19-alpine AS base
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-# Node 25+ images no longer bundle Corepack, so npm installs Corepack itself
-# (pinned). Keep this pin in lockstep with apps/api/Dockerfile — see
+# Node 24 still bundles Corepack, but npm installs a pinned copy anyway: both
+# images must resolve pnpm identically, and Node 25+ drops the bundled one.
+# Keep this pin in lockstep with apps/api/Dockerfile — see
 # refs/monorepo-docker-images.md. pnpm still comes from Corepack at the
 # `packageManager` version — the pnpm version is never spelled out here.
 RUN npm install --global corepack@0.35.0 && corepack enable
@@ -47,7 +48,7 @@ RUN pnpm --filter web build
 # The standalone output is a self-contained server with a traced, pruned
 # node_modules — so this stage needs neither pnpm nor an install step. It mirrors
 # the monorepo layout, hence apps/web/server.js.
-FROM node:26-alpine AS runtime
+FROM node:24.19-alpine AS runtime
 ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0

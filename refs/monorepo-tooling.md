@@ -9,7 +9,7 @@
 
 | Thing | Value | Enforced by |
 |---|---|---|
-| Node | `>=26 <27` (`.nvmrc` → `26`) | `engines.node`, `engine-strict=true` in `.npmrc`, `scripts/bootstrap.mjs` |
+| Node | `>=24.19 <25` (`.nvmrc` → `24.19.0`) | `engines.node`, `engine-strict=true` in `.npmrc`, `scripts/bootstrap.mjs` |
 | Package manager | pnpm `>=11 <12`, pinned `pnpm@11.20.0` | `engines.pnpm`, `packageManager`, `scripts/bootstrap.mjs` |
 | npm / yarn | **blocked** | `preinstall: npx only-allow pnpm` |
 | TypeScript | `5.9.3`, pinned in every workspace | per-package `devDependencies` |
