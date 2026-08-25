@@ -47,8 +47,10 @@ function parseVersion(raw) {
   };
 }
 
-function versionInRange(version, minMajor, maxMajorExclusive) {
-  return version.major >= minMajor && version.major < maxMajorExclusive;
+function versionInRange(version, minMajor, maxMajorExclusive, minMinor = 0) {
+  if (version.major < minMajor || version.major >= maxMajorExclusive)
+    return false;
+  return version.major > minMajor || version.minor >= minMinor;
 }
 
 function checkEngines() {
@@ -64,9 +66,9 @@ function checkEngines() {
     fail(`Could not parse Node version: ${process.versions.node}`);
   }
 
-  if (!versionInRange(nodeVersion, 26, 27)) {
+  if (!versionInRange(nodeVersion, 24, 25, 19)) {
     fail(
-      `Node ${process.versions.node} is outside engines.node (${engines.node ?? '>=26 <27'}). Use nvm/fnm/asdf with .nvmrc (Node 26).`,
+      `Node ${process.versions.node} is outside engines.node (${engines.node ?? '>=24.19 <25'}). Use nvm/fnm/asdf with .nvmrc (Node 24.19.0).`,
     );
   }
 
