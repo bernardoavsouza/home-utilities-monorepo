@@ -47,10 +47,33 @@ function parseVersion(raw) {
   };
 }
 
-function versionInRange(version, minMajor, maxMajorExclusive, minMinor = 0) {
-  if (version.major < minMajor || version.major >= maxMajorExclusive)
+// Both engines fields use the `>=<floor> <<major>` form. Parsing them keeps the
+// bounds in package.json alone: a version bump touches one place, and the error
+// message can never disagree with what is actually enforced.
+function parseEngineRange(spec) {
+  const match = String(spec ?? '')
+    .trim()
+    .match(/^>=(\d+)(?:\.(\d+))?(?:\.\d+)?\s+<(\d+)(?:\.\d+)*$/);
+  if (!match) return null;
+  return {
+    minMajor: Number(match[1]),
+    minMinor: Number(match[2] ?? 0),
+    maxMajorExclusive: Number(match[3]),
+  };
+}
+
+function versionInRange(version, range) {
+  if (version.major < range.minMajor || version.major >= range.maxMajorExclusive)
     return false;
-  return version.major > minMajor || version.minor >= minMinor;
+  return version.major > range.minMajor || version.minor >= range.minMinor;
+}
+
+function readNvmrc() {
+  try {
+    return readFileSync(join(root, '.nvmrc'), 'utf8').trim();
+  } catch {
+    return null;
+  }
 }
 
 function checkEngines() {
@@ -66,9 +89,17 @@ function checkEngines() {
     fail(`Could not parse Node version: ${process.versions.node}`);
   }
 
-  if (!versionInRange(nodeVersion, 24, 25, 19)) {
+  const nodeRange = parseEngineRange(engines.node);
+  if (!nodeRange) {
     fail(
-      `Node ${process.versions.node} is outside engines.node (${engines.node ?? '>=24.19 <25'}). Use nvm/fnm/asdf with .nvmrc (Node 24.19.0).`,
+      `Could not parse engines.node ("${engines.node ?? ''}") in package.json. Expected the form ">=<major>.<minor> <<major>".`,
+    );
+  }
+
+  if (!versionInRange(nodeVersion, nodeRange)) {
+    const pinned = readNvmrc();
+    fail(
+      `Node ${process.versions.node} is outside engines.node (${engines.node}). Use nvm/fnm/asdf with .nvmrc${pinned ? ` (Node ${pinned})` : ''}.`,
     );
   }
 
@@ -94,9 +125,16 @@ function checkEngines() {
     fail(`Could not parse pnpm version: ${pnpmResult.stdout || pnpmResult.stderr}`);
   }
 
-  if (!versionInRange(pnpmVersion, 11, 12)) {
+  const pnpmRange = parseEngineRange(engines.pnpm);
+  if (!pnpmRange) {
     fail(
-      `pnpm ${pnpmVersion.major}.${pnpmVersion.minor}.${pnpmVersion.patch} is outside engines.pnpm (${engines.pnpm ?? '>=11 <12'}). Use Corepack: corepack enable && corepack prepare ${packageJson.packageManager ?? 'pnpm@11.20.0'} --activate`,
+      `Could not parse engines.pnpm ("${engines.pnpm ?? ''}") in package.json. Expected the form ">=<major> <<major>".`,
+    );
+  }
+
+  if (!versionInRange(pnpmVersion, pnpmRange)) {
+    fail(
+      `pnpm ${pnpmVersion.major}.${pnpmVersion.minor}.${pnpmVersion.patch} is outside engines.pnpm (${engines.pnpm}). Use Corepack: corepack enable && corepack prepare ${packageJson.packageManager ?? 'pnpm@11.20.0'} --activate`,
     );
   }
 }
