@@ -1,6 +1,6 @@
 # Monorepo — Deploy (CD)
 
-> **Status:** stable · **Reviewed:** 2026-08-24 · **Source:** monorepo-boilerplate@feat/PP-13-cd-deploy-tag-vercel-render-neon
+> **Status:** stable · **Reviewed:** 2026-08-25 · **Source:** monorepo-boilerplate@feat/PP-13-cd-deploy-tag-vercel-render-neon
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -77,17 +77,22 @@ GHA `packages:write` covers **push** only. Provider **pull** auth is a separate 
 |---|---|
 | Root Directory (dashboard) | **`apps/web`** — required; `next.config.ts` and the Next app live there |
 | Config file | `apps/web/vercel.json` (not repo root) |
-| Node.js Version (dashboard) | **`24.x`** — Vercel builds/Functions support 20/22/24 only (default 24); not 26 |
+| Node.js Version (dashboard) | **`24.x`** — Vercel builds/Functions support 20/22/24 only (default 24); now the same major the repo pins |
 | `engines.node` (web) | `24.x` in `apps/web/package.json` — selects the Vercel runtime; overrides a mismatched Project Setting |
-| Install | `corepack enable && cd ../.. && pnpm install --frozen-lockfile --filter web... --config.engine-strict=false` |
+| Install | `corepack enable && cd ../.. && pnpm install --frozen-lockfile --filter web...` |
 | Build | package `build` (`next build`) — no custom `outputDirectory` (Next owns the output) |
 | `NEXT_PUBLIC_API_URL` | Build-time: `${RENDER_API_URL}/v1` (trailing slash stripped from the API base) |
 | Git auto-deploy | **Disabled** — CD-owned |
 | Domains MVP | `*.vercel.app` (no custom domain in this ticket) |
 
-Local/CI/Docker stay on Node **26** (`.nvmrc`, root `engines`). Vercel is the exception: platform max is 24, so the
-install command disables `engine-strict` for that one install (root still declares `>=26 <27`). Do not loosen
-the root engine pin for the whole monorepo.
+Local, CI, Docker and Vercel all sit on Node **24** now (`.nvmrc` → `24.19.0`, root `engines.node` → `>=24.19 <25`).
+Vercel is no longer an exception, so the install command no longer passes `--config.engine-strict=false`: that flag
+existed only because the root demanded Node 26 while Vercel's platform ceiling was 24, and the root pin is now inside
+Vercel's supported range. Keeping it would have left `engine-strict` disabled on the one install that most needs it.
+
+`engines.node` in `apps/web` stays the looser `24.x` on purpose — Vercel reads it to select a runtime **major**, so it
+is a platform selector, not a version gate. The `>=24.19` floor is enforced by the root `engines` and
+`scripts/bootstrap.mjs`.
 
 Web production is the **native** Vercel Next build. The `apps/web/Dockerfile` remains for PR rot-checks only (`monorepo-docker-images.md`).
 

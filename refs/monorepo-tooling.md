@@ -17,10 +17,10 @@
 
 `engine-strict=true` means a wrong Node/pnpm fails the install, not just warns.
 
-**Exception — Vercel web:** builds/Functions on Vercel only support Node `20.x` / `22.x` / `24.x` (not 26).
-Production web uses `24.x` (`apps/web/package.json` `engines` + dashboard). The Vercel install
-command passes `--config.engine-strict=false` so the root `>=26 <27` pin does not fail that
-install. Local, CI, and Docker stay on 26 — see `monorepo-deploy.md`.
+**Vercel web:** builds/Functions on Vercel only support Node `20.x` / `22.x` / `24.x`, and production web
+declares `24.x` (`apps/web/package.json` `engines` + dashboard) to select that runtime major. Since the
+repo pins Node 24, that is the same major as local/CI/Docker and the Vercel install needs no
+`engine-strict` escape hatch — see `monorepo-deploy.md`.
 
 ## Workspaces
 
