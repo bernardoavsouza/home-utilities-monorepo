@@ -6,6 +6,11 @@ name: CD
 # app is pointed at it, and each stage fails closed.
 #
 #   resolve → image → migrate → deploy-api → verify-api → deploy-web → verify-web
+#
+# Every stage from `migrate` on declares `environment: production`, because that
+# is where the deploy secrets live. A job that omits it does not fail: GitHub
+# resolves `secrets.X` to an empty string and the step runs with a blank value,
+# which surfaces far downstream as a confusing error from whatever consumed it.
 
 on:
   push:
@@ -131,6 +136,7 @@ jobs:
     name: 3 · Migrate database
     needs: [resolve, image]
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 15
     permissions:
       contents: read
@@ -159,6 +165,7 @@ jobs:
     name: 4 · Deploy API (Render)
     needs: [resolve, migrate]
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 40
     steps:
       # The hook answers with the deploy it just created. That id is the only
@@ -248,6 +255,7 @@ jobs:
     name: 5 · Verify API
     needs: deploy-api
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 15
     steps:
       # Render already reported `live`; this proves the app answers, not just that
@@ -281,6 +289,7 @@ jobs:
     name: 6 · Deploy web (Vercel)
     needs: [resolve, verify-api]
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -319,6 +328,7 @@ jobs:
     name: 7 · Verify web
     needs: deploy-web
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 15
     steps:
       - name: Smoke web home
