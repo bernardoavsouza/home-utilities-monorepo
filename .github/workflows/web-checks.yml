@@ -14,7 +14,7 @@ jobs:
     name: web · lint · typecheck · build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
 
       # `--filter=web` keeps the task graph, so `@packages/contracts#typecheck`
