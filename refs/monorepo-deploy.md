@@ -1,6 +1,6 @@
 # Monorepo — Deploy (CD)
 
-> **Status:** stable · **Reviewed:** 2026-08-25 · **Source:** monorepo-boilerplate@feat/PP-13-cd-deploy-tag-vercel-render-neon
+> **Status:** stable · **Reviewed:** 2026-08-26 · **Source:** monorepo-boilerplate@worktree-chore+vercel-tag-only-deploy
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -20,6 +20,12 @@ deploy. PR CI stays PR-only (`monorepo-ci.md`); image check workflows still buil
 
 CD concurrency serializes the same tag (`cancel-in-progress: false`) so a second run cannot kill a
 migrate / half-rolled deploy.
+
+**A provider's own git integration is a second deploy path.** The table above governs `cd.yml` only; it
+says nothing about what a provider does on its own when it sees a push. Vercel's GitHub app is the one
+wired to this repo, and it is off for `main` via `git.deploymentEnabled.main = false` in
+`apps/web/vercel.json` — see the Vercel table for what that covers and what it does not. Render has no
+git integration pointed at this repo; it moves only when `cd.yml` calls its deploy hook.
 
 ## Pipeline order
 
@@ -65,7 +71,7 @@ Do not commit secret values. Names only live here and in provider dashboards.
 | Service type | Image-backed (pull from GHCR), not “build from repo Dockerfile” for prod CD |
 | Default image URL | Must match `ghcr.io/bernardoavsouza/home-utilities-api` (tag/digest may vary via `imgURL`) |
 | Deploy hook | CD `POST`s the hook with URL-encoded `imgURL` |
-| Git auto-deploy | **Disabled** — CD-owned |
+| Git auto-deploy | **Disabled** — CD-owned. Dashboard-only setting: nothing in this repo can enforce it, so it has to be verified by hand when the service is created |
 | Runtime env | `DATABASE_URL` (Neon), `CORS_ORIGIN` (= `VERCEL_WEB_URL`) |
 | Registry credential | Required for **private** GHCR: Render dashboard credential for `ghcr.io` with a token that can `read:packages` |
 
@@ -82,7 +88,10 @@ GHA `packages:write` covers **push** only. Provider **pull** auth is a separate 
 | Install | `corepack enable && cd ../.. && pnpm install --frozen-lockfile --filter web...` |
 | Build | package `build` (`next build`) — no custom `outputDirectory` (Next owns the output) |
 | `NEXT_PUBLIC_API_URL` | Build-time: `${RENDER_API_URL}/v1` (trailing slash stripped from the API base) |
-| Git auto-deploy | **Disabled** — CD-owned |
+| Production git auto-deploy | **Off for `main`** — `git.deploymentEnabled.main = false` in `apps/web/vercel.json`. Production is CD-owned, tag-only |
+| What that switch depends on | Two dashboard values, so it is **not** self-enforcing: Production Branch must be named `main` (the key is a literal branch name, and a rename silently re-enables deploys) and Root Directory must be `apps/web` (or `vercel.json` is never read at all) |
+| What that switch does **not** cover | Commit-triggered deploys only. A manual "Promote to Production" and any Vercel Deploy Hook still reach production, and neither is visible from this repo |
+| PR previews | **Kept.** Pushing to a PR branch still builds a preview — previews touch no production URL and are not a release |
 | Domains MVP | `*.vercel.app` (no custom domain in this ticket) |
 
 Local, CI, Docker and Vercel all sit on Node **24** now (`.nvmrc` → `24.19.0`, root `engines.node` → `>=24.19 <25`).

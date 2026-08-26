@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "corepack enable && cd ../.. && pnpm install --frozen-lockfile --filter web..."
+  "installCommand": "corepack enable && cd ../.. && pnpm install --frozen-lockfile --filter web...",
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  }
 }
