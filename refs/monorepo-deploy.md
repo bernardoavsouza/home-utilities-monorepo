@@ -1,6 +1,6 @@
 # Monorepo — Deploy (CD)
 
-> **Status:** stable · **Reviewed:** 2026-08-26 · **Source:** monorepo-boilerplate@worktree-chore+actions-node24-runtime
+> **Status:** stable · **Reviewed:** 2026-08-26 · **Source:** monorepo-boilerplate@fix/cd-production-environment
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -70,6 +70,15 @@ one still serving traffic, which is why the rollout gate comes first.
 
 ## GitHub Actions secrets
 
+These are **environment** secrets on the `production` environment, not repo-level ones, so
+every job that reads one declares `environment: production` — stages 3 through 7. Stages 1 and 2
+do not: `resolve` reads no secret and `image` uses only `GITHUB_TOKEN`, which needs no environment.
+
+**A job that omits the key does not fail.** GitHub resolves `secrets.X` to an empty string for a
+secret the job cannot see — no error, no warning — and the blank value surfaces later as an error
+from whatever consumed it. Moving a secret between repo and environment scope is therefore a
+workflow change, not just a dashboard change.
+
 | Secret | Used for |
 |---|---|
 | `DATABASE_URL` | Neon URL for the migrate step in GHA |
@@ -82,6 +91,9 @@ one still serving traffic, which is why the rollout gate comes first.
 | `VERCEL_WEB_URL` | Public web base (`*.vercel.app`) — smoke + document as Render `CORS_ORIGIN` |
 
 Do not commit secret values. Names only live here and in provider dashboards.
+
+The `production` environment carries no protection rules and no deployment branch policy. That is
+load-bearing: CD is triggered by a tag, and a branch policy would reject `refs/tags/v*` outright.
 
 ## Render (API)
 
