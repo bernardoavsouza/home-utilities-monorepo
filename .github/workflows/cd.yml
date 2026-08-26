@@ -176,25 +176,65 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE_URL="${{ needs.resolve.outputs.image_tag }}"
-          ENCODED="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$IMAGE_URL")"
           HOOK="${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+          # Read the service id before any request: the id is a path segment of
+          # the hook URL, so a malformed hook should fail here by name rather
+          # than downstream as an opaque HTTP error.
+          SERVICE_ID="$(printf '%s' "$HOOK" | sed -n 's#.*/deploy/\(srv-[A-Za-z0-9]*\).*#\1#p')"
+          if [ -z "$SERVICE_ID" ]; then
+            echo "::error::Could not read the service id (srv-...) out of RENDER_DEPLOY_HOOK_URL"
+            exit 1
+          fi
+
+          # Describe the service before deploying to it. `imgURL` is only
+          # meaningful for an image-backed service; pointed at a repo-backed one
+          # the hook refuses with a bare 400 that reads like a broken URL. This
+          # is reported, not enforced: the hook stays the authority on what it
+          # accepts, and a wrong guess here must not block a working setup.
+          SVC="$(curl -sS -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${SERVICE_ID}" 2>/dev/null || true)"
+          SVC_DESC="$(printf '%s' "$SVC" | jq -r '"type=\(.type // "?") runtime=\(.serviceDetails.env // "?") image=\(.imageDetails.imagePath // "<none>") repo=\(.repo // "<none>")"' 2>/dev/null || echo "could not describe service")"
+          echo "Service ${SERVICE_ID}: ${SVC_DESC}"
+
+          ENCODED="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$IMAGE_URL")"
           case "$HOOK" in
             *\?*) URL="${HOOK}&imgURL=${ENCODED}" ;;
             *) URL="${HOOK}?imgURL=${ENCODED}" ;;
           esac
 
-          RESPONSE="$(curl -fsS -X POST "$URL")"
-          DEPLOY_ID="$(printf '%s' "$RESPONSE" | jq -r '.deploy.id // empty')"
-          if [ -z "$DEPLOY_ID" ]; then
-            echo "::error::Render deploy hook returned no deploy id. Response: $RESPONSE"
+          # Deliberately no `-f`: it makes curl exit non-zero and drop the body,
+          # and the body is the only place Render says why it refused.
+          BODY="$(mktemp)"
+          CODE="$(curl -sS -o "$BODY" -w '%{http_code}' -X POST "$URL" || echo 000)"
+          RESPONSE="$(cat "$BODY")"
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            {
+              echo "### Stage 4 failed — Render refused the deploy hook"
+              echo
+              echo "| | |"
+              echo "|---|---|"
+              echo "| HTTP | \`${CODE}\` |"
+              echo "| service | \`${SERVICE_ID}\` — ${SVC_DESC} |"
+              echo "| imgURL | \`${IMAGE_URL}\` |"
+              echo
+              echo "Render said:"
+              echo
+              echo '```'
+              echo "${RESPONSE:-<empty body>}"
+              echo '```'
+              echo
+              echo "A \`400\` with an image-backed \`imgURL\` usually means the service is not"
+              echo "image-backed. The hook accepts \`imgURL\` only on a service created as"
+              echo "*Deploy an existing image*."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Render deploy hook returned HTTP ${CODE}: ${RESPONSE:-<empty body>}"
             exit 1
           fi
 
-          # The service id is the path segment of the hook URL itself, so it does
-          # not need a secret of its own.
-          SERVICE_ID="$(printf '%s' "$HOOK" | sed -n 's#.*/deploy/\(srv-[A-Za-z0-9]*\).*#\1#p')"
-          if [ -z "$SERVICE_ID" ]; then
-            echo "::error::Could not read the service id (srv-...) out of RENDER_DEPLOY_HOOK_URL"
+          DEPLOY_ID="$(printf '%s' "$RESPONSE" | jq -r '.deploy.id // empty' 2>/dev/null || true)"
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "::error::Render accepted the hook (HTTP ${CODE}) but returned no deploy id. Response: ${RESPONSE:-<empty body>}"
             exit 1
           fi
 
