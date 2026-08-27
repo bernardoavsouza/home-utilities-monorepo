@@ -192,9 +192,27 @@ jobs:
           # the hook refuses with a bare 400 that reads like a broken URL. This
           # is reported, not enforced: the hook stays the authority on what it
           # accepts, and a wrong guess here must not block a working setup.
-          SVC="$(curl -sS -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+          # The HTTP status is read, not discarded: `jq` exits 0 on an error
+          # payload as happily as on a service, and on empty input it exits 0
+          # printing nothing — so a `|| echo` fallback never fires and a 401
+          # renders as `type=?`, indistinguishable from a genuinely repo-backed
+          # service. The hint at the bottom of the failure summary would then
+          # send the reader off to re-create a service that was fine.
+          SVC_BODY="$(mktemp)"
+          SVC_CODE="$(curl -sS -o "$SVC_BODY" -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services/${SERVICE_ID}" 2>/dev/null || true)"
-          SVC_DESC="$(printf '%s' "$SVC" | jq -r '"type=\(.type // "?") runtime=\(.serviceDetails.env // "?") image=\(.imageDetails.imagePath // "<none>") repo=\(.repo // "<none>")"' 2>/dev/null || echo "could not describe service")"
+          SVC_DESC=""
+          case "$SVC_CODE" in
+            2*)
+              # A present `.type` is the proof this is a service and not an
+              # error payload that happens to be valid JSON.
+              if [ -n "$(jq -r '.type // empty' "$SVC_BODY" 2>/dev/null || true)" ]; then
+                SVC_DESC="$(jq -r '"type=\(.type // "?") runtime=\(.serviceDetails.env // "?") image=\(.imageDetails.imagePath // "<none>") repo=\(.repo // "<none>")"' "$SVC_BODY" 2>/dev/null || true)"
+              fi
+              ;;
+          esac
+          SVC_DESC="${SVC_DESC:-could not describe service (HTTP ${SVC_CODE:-000})}"
           echo "Service ${SERVICE_ID}: ${SVC_DESC}"
 
           ENCODED="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$IMAGE_URL")"
@@ -206,8 +224,22 @@ jobs:
           # Deliberately no `-f`: it makes curl exit non-zero and drop the body,
           # and the body is the only place Render says why it refused.
           BODY="$(mktemp)"
-          CODE="$(curl -sS -o "$BODY" -w '%{http_code}' -X POST "$URL" || echo 000)"
+          # `|| true`, never `|| echo 000`: curl's `-w` already prints a status
+          # and adds no trailing newline, so a fallback `echo` is glued onto it
+          # instead of replacing it. A DNS failure would report `000000`, and a
+          # transfer that dies after a good status would report `200000` — which
+          # tests as `>= 300`, calling a deploy that Render *did* accept a
+          # refusal and then never polling the rollout it just started.
+          CODE="$(curl -sS -o "$BODY" -w '%{http_code}' -X POST "$URL" || true)"
           RESPONSE="$(cat "$BODY")"
+          # curl prints nothing at all if it dies before write-out, and `[` on an
+          # empty string is a bash error, not a failed comparison.
+          case "$CODE" in
+            ''|*[!0-9]*)
+              echo "::error::curl returned no HTTP status for the deploy hook (got: '${CODE}')"
+              exit 1
+              ;;
+          esac
           if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
             {
               echo "### Stage 4 failed — Render refused the deploy hook"
