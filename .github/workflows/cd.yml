@@ -1,16 +1,36 @@
 name: CD
 
 # One job per stage, chained with `needs:`, so the Actions run page draws the
-# pipeline as a graph instead of one opaque box. The order is load-bearing: the
-# database is migrated before the API rolls, the API is proven live before the web
-# app is pointed at it, and each stage fails closed.
+# pipeline as a graph instead of one opaque box.
 #
-#   resolve → image → migrate → deploy-api → verify-api → deploy-web → verify-web
+# The two apps ship on independent tracks that fan out from `resolve` and join
+# again at `release`:
 #
-# Every stage from `migrate` on declares `environment: production`, because that
-# is where the deploy secrets live. A job that omits it does not fail: GitHub
-# resolves `secrets.X` to an empty string and the step runs with a blank value,
-# which surfaces far downstream as a confusing error from whatever consumed it.
+#   resolve ┬─ image → migrate → deploy-api → verify-api ─┬─ release
+#           └─ deploy-web → verify-web ──────────────┘
+#
+# Inside the API track the order is still load-bearing: the database is migrated
+# before the API rolls, and the rollout is proven `live` before the API is
+# smoked. The web track carries no dependency on the API track on purpose —
+# Vercel builds from source, and `NEXT_PUBLIC_API_URL` points at a stable Render
+# URL rather than at anything this run produces.
+#
+# The parallelism buys a trade, and it is a real one: while the API is still
+# rolling, the new web already serves against the *previous* API, so a tag that
+# changes the HTTP contract is visible to users for the length of the Render
+# rollout. Releases have to keep the contract back-compatible; a release that
+# cannot must re-serialize the tracks by giving `deploy-web` a `needs:
+# verify-api` again.
+#
+# `release` is the join. Every stage already fails closed on its own; this job is
+# the single node that cannot go green unless both tracks did, so it is the one
+# thing to look at to know whether a tag actually shipped.
+#
+# Every stage that reads a deploy secret declares `environment: production`,
+# because that is where those secrets live. A job that omits it does not fail:
+# GitHub resolves `secrets.X` to an empty string and the step runs with a blank
+# value, which surfaces far downstream as a confusing error from whatever
+# consumed it.
 
 on:
   push:
@@ -98,7 +118,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   image:
-    name: 2 · Build & push API image
+    name: API 1 · Build & push image
     needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -133,7 +153,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   migrate:
-    name: 3 · Migrate database
+    name: API 2 · Migrate database
     needs: [resolve, image]
     runs-on: ubuntu-latest
     environment: production
@@ -162,7 +182,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   deploy-api:
-    name: 4 · Deploy API (Render)
+    name: API 3 · Deploy (Render)
     needs: [resolve, migrate]
     runs-on: ubuntu-latest
     environment: production
@@ -242,7 +262,7 @@ jobs:
           esac
           if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
             {
-              echo "### Stage 4 failed — Render refused the deploy hook"
+              echo "### API deploy failed — Render refused the deploy hook"
               echo
               echo "| | |"
               echo "|---|---|"
@@ -324,7 +344,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   verify-api:
-    name: 5 · Verify API
+    name: API 4 · Verify
     needs: deploy-api
     runs-on: ubuntu-latest
     environment: production
@@ -358,8 +378,8 @@ jobs:
           smoke /v1/health/ready
 
   deploy-web:
-    name: 6 · Deploy web (Vercel)
-    needs: [resolve, verify-api]
+    name: Web 1 · Deploy (Vercel)
+    needs: resolve
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 30
@@ -397,7 +417,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
   verify-web:
-    name: 7 · Verify web
+    name: Web 2 · Verify
     needs: deploy-web
     runs-on: ubuntu-latest
     environment: production
@@ -422,3 +442,22 @@ jobs:
           echo "::error::Smoke failed for web home"
           cat /tmp/web-body || true
           exit 1
+
+  release:
+    name: Release · Both apps live
+    needs: [resolve, verify-api, verify-web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Reads no secret, so it declares no environment. Its only job is to be the
+      # one node that means "both tracks shipped this tag".
+      - name: Summary
+        run: |
+          {
+            echo "### \`${{ needs.resolve.outputs.tag }}\` shipped"
+            echo
+            echo "| track | |"
+            echo "|---|---|"
+            echo "| API | image \`${{ needs.resolve.outputs.image_tag }}\` rolled out and smoked |"
+            echo "| web | deployed from \`${{ needs.resolve.outputs.short_sha }}\` and smoked |"
+          } >> "$GITHUB_STEP_SUMMARY"
