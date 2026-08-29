@@ -437,13 +437,45 @@ jobs:
           USER_NAME="$(jq -r '.user.username // .username // "?"' /tmp/vc-user)"
           echo "token belongs to user ${USER_NAME} (id ${USER_ID})"
 
-          # 2 · Which accounts can it reach? A masked id here is VERCEL_ORG_ID.
+          # A secret's *shape* is not the secret. Length and prefix are what
+          # separate a wrong id from a right one pasted short, and neither is
+          # recoverable from the other. Masking hides exactly the difference
+          # that matters here, so it has to be described rather than printed.
+          shape() {
+            case "$1" in
+              "$2"*) echo "starts with '$2', ${#1} chars" ;;
+              *) echo "does NOT start with '$2', ${#1} chars" ;;
+            esac
+          }
+          echo "VERCEL_ORG_ID: $(shape "$VERCEL_ORG_ID" team_)"
+          echo "VERCEL_PROJECT_ID: $(shape "$VERCEL_PROJECT_ID" prj_)"
+
+          # 2 · Which accounts can it reach, and how does each relate to the
+          # configured one? A truncated paste and an unrelated id both fail the
+          # same way against the API; only this comparison tells them apart.
           CODE="$(req /tmp/vc-teams '/v2/teams?limit=100')"
           echo "teams the token can see:"
           case "$CODE" in
-            2*) jq -r '.teams[]? | "  - \(.id)  \(.slug)"' /tmp/vc-teams || echo "  (none)" ;;
+            2*) ;;
             *) echo "  (could not list teams — HTTP ${CODE:-000})" ;;
           esac
+          for T in $(jq -r '.teams[]?.id' /tmp/vc-teams 2>/dev/null); do
+            if [ "$T" = "$VERCEL_ORG_ID" ]; then
+              REL="matches VERCEL_ORG_ID exactly"
+            elif [ "${T#"$VERCEL_ORG_ID"}" != "$T" ] && [ -n "$VERCEL_ORG_ID" ]; then
+              REL="VERCEL_ORG_ID is this id truncated — $(( ${#T} - ${#VERCEL_ORG_ID} )) char(s) missing from the end"
+            else
+              REL="unrelated to VERCEL_ORG_ID (${#T} chars vs ${#VERCEL_ORG_ID})"
+            fi
+            echo "  - team ${#T} chars — ${REL}"
+            # What the token can actually see in there. A project whose id
+            # renders `***` is the one VERCEL_PROJECT_ID already points at.
+            if [ "$(req /tmp/vc-list "/v9/projects?teamId=${T}&limit=100")" = "200" ]; then
+              jq -r '.projects[]? | "      · \(.name)  \(.id)"' /tmp/vc-list || true
+            else
+              echo "      (cannot list this team's projects with this token)"
+            fi
+          done
 
           # 3 · Does the project resolve under the configured account?
           CODE="$(req /tmp/vc-proj "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}")"
@@ -468,6 +500,9 @@ jobs:
               fi
             done
           fi
+          # Also to stdout: the step summary is not readable from `gh run view`,
+          # and the conclusion is the whole point of the step.
+          echo "owner search: ${OWNER:-not found under any account this token can reach}"
 
           {
             echo "### Web deploy failed — Vercel could not resolve the project"
