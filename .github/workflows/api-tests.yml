@@ -1,6 +1,5 @@
 name: API tests
 
-# Pull requests targeting main only — there is no push trigger.
 on:
   pull_request:
     branches: [main]
@@ -37,8 +36,6 @@ jobs:
       - name: Prisma generate
         run: pnpm prisma:generate
 
-      # Only the test database: `db:migrate` at the root also targets `app`,
-      # which does not exist in CI. The committed .env.test points here too.
       - name: Migrate test database
         run: pnpm --filter api db:migrate:test
 

@@ -1,0 +1,334 @@
+name: CD · API
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing git tag to redeploy (e.g. v1.2.3). Required for dispatch.
+        required: true
+        type: string
+
+concurrency:
+  group: cd-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ghcr.io/bernardoavsouza/home-utilities-api
+
+jobs:
+  resolve:
+    name: 1 · Resolve tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      commit: ${{ steps.resolve.outputs.commit }}
+      short_sha: ${{ steps.resolve.outputs.short_sha }}
+      image_tag: ${{ steps.names.outputs.image_tag }}
+      image_sha: ${{ steps.names.outputs.image_sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: resolve
+        uses: ./.github/actions/resolve-tag
+        with:
+          tag: ${{ github.event.inputs.tag }}
+
+      - name: Name the images
+        id: names
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          SHORT_SHA: ${{ steps.resolve.outputs.short_sha }}
+        run: |
+          set -euo pipefail
+          {
+            echo "image_tag=${IMAGE_NAME}:${TAG}"
+            echo "image_sha=${IMAGE_NAME}:sha-${SHORT_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          SHORT_SHA: ${{ steps.resolve.outputs.short_sha }}
+          IMAGE_TAG: ${{ steps.names.outputs.image_tag }}
+        run: |
+          {
+            echo "### Deploying API \`${TAG}\`"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| commit | \`${SHORT_SHA}\` |"
+            echo "| image | \`${IMAGE_TAG}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  image:
+    name: 2 · Build & push image
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ needs.resolve.outputs.image_tag }}
+            ${{ needs.resolve.outputs.image_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  migrate:
+    name: 3 · Migrate database
+    needs: [resolve, image]
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          : "${DATABASE_URL:?DATABASE_URL is not set in this environment}"
+          docker run --rm \
+            -e DATABASE_URL \
+            "$IMAGE_TAG" \
+            ./node_modules/.bin/prisma migrate deploy
+
+  deploy:
+    name: 4 · Deploy (Render)
+    needs: [resolve, migrate]
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 40
+    steps:
+      - name: Trigger Render deploy
+        id: hook
+        env:
+          IMAGE_URL: ${{ needs.resolve.outputs.image_tag }}
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          : "${HOOK:?RENDER_DEPLOY_HOOK_URL is not set in this environment}"
+          : "${RENDER_API_KEY:?RENDER_API_KEY is not set in this environment}"
+
+          SERVICE_ID="$(printf '%s' "$HOOK" | sed -n 's#.*/deploy/\(srv-[A-Za-z0-9]*\).*#\1#p')"
+          if [ -z "$SERVICE_ID" ]; then
+            echo "::error::Could not read the service id (srv-...) out of RENDER_DEPLOY_HOOK_URL"
+            exit 1
+          fi
+
+          SVC_BODY="$(mktemp)"
+          SVC_CODE="$(curl -sS -o "$SVC_BODY" -w '%{http_code}' \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/services/${SERVICE_ID}" 2>/dev/null || true)"
+          case "$SVC_CODE" in
+            2*) ;;
+            401|403)
+              echo "::error::Render refused RENDER_API_KEY (GET /v1/services/${SERVICE_ID} returned HTTP ${SVC_CODE}). Not firing the deploy hook."
+              exit 1
+              ;;
+            404)
+              echo "::error::Render knows no service ${SERVICE_ID} (HTTP 404) — check the srv-... segment of RENDER_DEPLOY_HOOK_URL. Not firing the deploy hook."
+              exit 1
+              ;;
+            *)
+              echo "::error::Could not describe service ${SERVICE_ID} (HTTP ${SVC_CODE:-000}) — not firing the deploy hook. $(head -c 500 "$SVC_BODY" 2>/dev/null | tr '\n' ' ')"
+              exit 1
+              ;;
+          esac
+          SVC_DESC="$(jq -r '"type=\(.type // "?") runtime=\(.serviceDetails.env // "?") image=\(.imageDetails.imagePath // "<none>") repo=\(.repo // "<none>")"' "$SVC_BODY" 2>/dev/null || true)"
+          SVC_DESC="${SVC_DESC:-described, but the response carried no service fields}"
+          echo "Service ${SERVICE_ID}: ${SVC_DESC}"
+
+          ENCODED="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$IMAGE_URL")"
+          case "$HOOK" in
+            *\?*) URL="${HOOK}&imgURL=${ENCODED}" ;;
+            *) URL="${HOOK}?imgURL=${ENCODED}" ;;
+          esac
+
+          BODY="$(mktemp)"
+          CODE="$(curl -sS -o "$BODY" -w '%{http_code}' -X POST "$URL" || true)"
+          RESPONSE="$(cat "$BODY")"
+          case "$CODE" in
+            ''|*[!0-9]*)
+              echo "::error::curl returned no HTTP status for the deploy hook (got: '${CODE}')"
+              exit 1
+              ;;
+          esac
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            {
+              echo "### API deploy failed — Render refused the deploy hook"
+              echo
+              echo "| | |"
+              echo "|---|---|"
+              echo "| HTTP | \`${CODE}\` |"
+              echo "| service | \`${SERVICE_ID}\` — ${SVC_DESC} |"
+              echo "| imgURL | \`${IMAGE_URL}\` |"
+              echo
+              echo "Render said:"
+              echo
+              echo '```'
+              echo "${RESPONSE:-<empty body>}"
+              echo '```'
+              echo
+              echo "A \`400\` with an image-backed \`imgURL\` usually means the service is not"
+              echo "image-backed. The hook accepts \`imgURL\` only on a service created as"
+              echo "*Deploy an existing image*."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Render deploy hook returned HTTP ${CODE}: ${RESPONSE:-<empty body>}"
+            exit 1
+          fi
+
+          DEPLOY_ID="$(printf '%s' "$RESPONSE" | jq -r '.deploy.id // empty' 2>/dev/null || true)"
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "::error::Render accepted the hook (HTTP ${CODE}) but returned no deploy id. Response: ${RESPONSE:-<empty body>}"
+            exit 1
+          fi
+
+          {
+            echo "deploy_id=$DEPLOY_ID"
+            echo "service_id=$SERVICE_ID"
+          } >> "$GITHUB_OUTPUT"
+          echo "Queued Render deploy $DEPLOY_ID on $SERVICE_ID"
+
+      - name: Wait for the deploy to go live
+        id: rollout
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ steps.hook.outputs.service_id }}
+          DEPLOY_ID: ${{ steps.hook.outputs.deploy_id }}
+        run: |
+          set -euo pipefail
+          : "${RENDER_API_KEY:?RENDER_API_KEY is not set in this environment}"
+          API="https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}"
+          STATUS="unknown"
+          i=1
+          MISSES=0
+          while [ "$i" -le 120 ]; do
+            BODY="$(curl -sS \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H 'Accept: application/json' \
+              "$API" 2>/dev/null || true)"
+            NEXT="$(printf '%s' "$BODY" | jq -r '.status // empty' 2>/dev/null || true)"
+            if [ -z "$NEXT" ]; then
+              MISSES=$((MISSES + 1))
+              echo "check $i: no status from the Render API (${MISSES} in a row)"
+              if [ "$MISSES" -ge 20 ]; then
+                echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+                echo "::error::Render API did not answer for ${MISSES} consecutive checks (last known status: $STATUS)"
+                exit 1
+              fi
+            else
+              MISSES=0
+              STATUS="$NEXT"
+              case "$STATUS" in
+                live)
+                  echo "status=live" >> "$GITHUB_OUTPUT"
+                  echo "Deploy is live after $i check(s)"
+                  exit 0
+                  ;;
+                build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                  echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+                  echo "::error::Render deploy ended as '$STATUS' — the API did NOT roll out"
+                  exit 1
+                  ;;
+                *)
+                  echo "check $i: $STATUS"
+                  ;;
+              esac
+            fi
+            i=$((i + 1))
+            sleep 15
+          done
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "::error::Render deploy never reached 'live' (last status: $STATUS)"
+          exit 1
+
+      - name: Summary
+        if: ${{ !cancelled() }}
+        env:
+          DEPLOY_ID: ${{ steps.hook.outputs.deploy_id }}
+          SERVICE_ID: ${{ steps.hook.outputs.service_id }}
+          STATUS: ${{ steps.rollout.outputs.status }}
+        run: |
+          {
+            echo "### API rollout"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| deploy | \`${DEPLOY_ID}\` |"
+            echo "| service | \`${SERVICE_ID}\` |"
+            echo "| status | **${STATUS:-never started}** |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    name: 5 · Verify
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Smoke health + ready
+        env:
+          RENDER_API_URL: ${{ secrets.RENDER_API_URL }}
+        run: |
+          set -euo pipefail
+          : "${RENDER_API_URL:?RENDER_API_URL is not set in this environment}"
+          BASE="${RENDER_API_URL%/}"
+          smoke() {
+            local path="$1"
+            local i=1
+            while [ "$i" -le 36 ]; do
+              code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' "$BASE$path" || true)"
+              if [ "$code" = "200" ]; then
+                echo "OK $path ($code) after $i attempt(s)"
+                return 0
+              fi
+              echo "attempt $i: $path → $code"
+              i=$((i + 1))
+              sleep 10
+            done
+            echo "::error::Smoke failed for $path"
+            cat /tmp/smoke-body || true
+            exit 1
+          }
+          smoke /v1/health
+          smoke /v1/health/ready

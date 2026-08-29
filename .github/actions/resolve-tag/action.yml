@@ -1,0 +1,66 @@
+name: Resolve tag
+description: Resolve the tag being deployed to a commit and assert that commit is on the default branch.
+
+inputs:
+  tag:
+    description: Tag to deploy. Falls back to the pushed ref when empty.
+    required: false
+    default: ''
+
+outputs:
+  tag:
+    description: The resolved tag.
+    value: ${{ steps.meta.outputs.tag }}
+  commit:
+    description: Commit the tag points at.
+    value: ${{ steps.meta.outputs.commit }}
+  short_sha:
+    description: Seven-character short sha of that commit.
+    value: ${{ steps.meta.outputs.short_sha }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve tag
+      id: meta
+      shell: bash
+      env:
+        TAG_INPUT: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+        TAG="$TAG_INPUT"
+        if [ -z "$TAG" ]; then
+          TAG="${GITHUB_REF_NAME}"
+        fi
+        case "$TAG" in
+          v*) ;;
+          *)
+            echo "::error::Tag must match v* (got: $TAG)"
+            exit 1
+            ;;
+        esac
+        if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+          git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
+        fi
+        COMMIT="$(git rev-list -n 1 "$TAG")"
+        SHORT_SHA="$(git rev-parse --short=7 "$COMMIT")"
+        {
+          echo "tag=$TAG"
+          echo "commit=$COMMIT"
+          echo "short_sha=$SHORT_SHA"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Assert tag commit is on the default branch
+      shell: bash
+      env:
+        COMMIT: ${{ steps.meta.outputs.commit }}
+        TAG: ${{ steps.meta.outputs.tag }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      run: |
+        set -euo pipefail
+        BRANCH="${DEFAULT_BRANCH:-main}"
+        git fetch origin "$BRANCH"
+        if ! git merge-base --is-ancestor "$COMMIT" "origin/$BRANCH"; then
+          echo "::error::Commit ${COMMIT} (tag ${TAG}) is not on origin/${BRANCH}"
+          exit 1
+        fi

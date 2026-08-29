@@ -1,6 +1,5 @@
 name: Web image
 
-# Pull requests targeting main only — there is no push trigger.
 on:
   pull_request:
     branches: [main]
@@ -9,7 +8,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Nothing is pushed — this only keeps the Dockerfile from rotting.
 jobs:
   image:
     name: web · docker build
@@ -19,8 +17,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      # NEXT_PUBLIC_API_URL is a build arg because Next inlines it into the client
-      # bundle; the value here only has to be well-formed, never reachable.
       - name: Build
         uses: docker/build-push-action@v7
         with:

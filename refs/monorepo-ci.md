@@ -28,7 +28,8 @@ called `docker build` would be indistinguishable there. Keep names unique when a
 
 **Only on pull requests whose base is `main`.** There is no `push` trigger and no other base branch:
 `main` is the only long-lived branch in this repo, so a PR to `main` is the only path into it.
-Production deploy is a **separate** workflow (`.github/workflows/cd.yml`) on tag `v*` — see
+Production deploy is **separate**, and follows the same one-workflow-per-app rule:
+`.github/workflows/cd.api.yml` and `.github/workflows/cd.web.yml`, both on tag `v*` — see
 `monorepo-deploy.md`. Do not fold deploy into these PR checks.
 
 | Event | Runs? |

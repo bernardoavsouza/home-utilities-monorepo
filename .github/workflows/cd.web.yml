@@ -1,0 +1,227 @@
+name: CD · Web
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing git tag to redeploy (e.g. v1.2.3). Required for dispatch.
+        required: true
+        type: string
+
+concurrency:
+  group: cd-web
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: 1 · Resolve tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.resolve.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: resolve
+        uses: ./.github/actions/resolve-tag
+        with:
+          tag: ${{ github.event.inputs.tag }}
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          SHORT_SHA: ${{ steps.resolve.outputs.short_sha }}
+        run: |
+          {
+            echo "### Deploying web \`${TAG}\`"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| commit | \`${SHORT_SHA}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: 2 · Deploy (Vercel)
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    outputs:
+      deployment_url: ${{ steps.deploy.outputs.deployment_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Preflight Vercel scope
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          : "${VERCEL_TOKEN:?VERCEL_TOKEN is not set in this environment}"
+          : "${VERCEL_ORG_ID:?VERCEL_ORG_ID is not set in this environment}"
+          : "${VERCEL_PROJECT_ID:?VERCEL_PROJECT_ID is not set in this environment}"
+
+          req() {
+            curl -sS -o "$1" -w '%{http_code}' \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              -H 'Accept: application/json' \
+              "https://api.vercel.com$2" 2>/dev/null || true
+          }
+
+          CODE="$(req /tmp/vc-user /v2/user)"
+          case "$CODE" in
+            2*) ;;
+            *)
+              echo "::error::VERCEL_TOKEN is not usable (GET /v2/user → HTTP ${CODE:-000}). $(cat /tmp/vc-user 2>/dev/null)"
+              exit 1
+              ;;
+          esac
+          USER_ID="$(jq -r '.user.id // .id // "?"' /tmp/vc-user)"
+          USER_NAME="$(jq -r '.user.username // .username // "?"' /tmp/vc-user)"
+          echo "token belongs to user ${USER_NAME} (id ${USER_ID})"
+
+          CODE="$(req /tmp/vc-proj "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}")"
+          case "$CODE" in
+            2*)
+              echo "project resolves: $(jq -r '.name // "?"' /tmp/vc-proj)"
+              exit 0
+              ;;
+          esac
+          echo "project did NOT resolve under VERCEL_ORG_ID (HTTP ${CODE:-000}): $(cat /tmp/vc-proj 2>/dev/null)"
+
+          shape() {
+            case "$1" in
+              "$2"*) echo "${#1} chars, starts with '$2'" ;;
+              *) echo "${#1} chars, no '$2' prefix" ;;
+            esac
+          }
+          echo "VERCEL_ORG_ID: $(shape "$VERCEL_ORG_ID" team_) — expected only for a team; a personal account's org id is unprefixed"
+          echo "VERCEL_PROJECT_ID: $(shape "$VERCEL_PROJECT_ID" prj_)"
+
+          if [ "$(req /tmp/vc-teams '/v2/teams?limit=100')" != "200" ]; then
+            echo "could not list the teams this token can reach — the owner search below may come up empty"
+          fi
+
+          OWNER=""
+          for T in $(jq -r '.teams[]?.id' /tmp/vc-teams 2>/dev/null); do
+            if [ "$T" != "$VERCEL_ORG_ID" ] && [ "${T#"$VERCEL_ORG_ID"}" != "$T" ]; then
+              echo "a reachable team id starts with VERCEL_ORG_ID — the secret looks truncated by $(( ${#T} - ${#VERCEL_ORG_ID} )) char(s) at the end"
+            fi
+
+            if [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${T}")" = "200" ]; then
+              OWNER="a team the token can reach — set VERCEL_ORG_ID to ${T}"
+              break
+            fi
+          done
+          if [ -z "$OWNER" ] && [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}")" = "200" ]; then
+            if [ "$VERCEL_ORG_ID" = "$USER_ID" ]; then
+              OWNER="the token's default scope. VERCEL_ORG_ID is already the user id and the API rejects a user id as teamId — use the Team ID from Vercel → Settings → General"
+            else
+              OWNER="the personal account ${USER_NAME} — set VERCEL_ORG_ID to ${USER_ID}"
+            fi
+          fi
+          echo "owner search: ${OWNER:-not found under any account this token can reach}"
+
+          {
+            echo "### Web deploy failed — Vercel could not resolve the project"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| token | valid, belongs to \`${USER_NAME}\` |"
+            echo "| project under \`VERCEL_ORG_ID\` | HTTP \`${CODE:-000}\` |"
+            if [ -n "$OWNER" ]; then
+              echo "| actually owned by | ${OWNER} |"
+            else
+              echo "| actually owned by | not found under any account this token can reach |"
+            fi
+            echo
+            if [ -n "$OWNER" ]; then
+              echo "\`VERCEL_PROJECT_ID\` is right, but \`VERCEL_ORG_ID\` points at the wrong account."
+            else
+              echo "Either \`VERCEL_PROJECT_ID\` is not this project's id — copy it from Project →"
+              echo "Settings → General → Project ID, where it normally reads \`prj_…\` — or the token"
+              echo "is scoped to an account that cannot see it. A token's *scope* is chosen when it"
+              echo "is created and is separate from its access level, so a full-access token scoped"
+              echo "to your personal account still cannot read a team's projects."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Vercel could not resolve VERCEL_PROJECT_ID under VERCEL_ORG_ID (HTTP ${CODE:-000})"
+          exit 1
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59
+
+      - name: Deploy Vercel (prod)
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          RENDER_API_URL: ${{ secrets.RENDER_API_URL }}
+        run: |
+          set -euo pipefail
+          : "${RENDER_API_URL:?RENDER_API_URL is not set in this environment}"
+          API_BASE="${RENDER_API_URL%/}"
+          export NEXT_PUBLIC_API_URL="${API_BASE}/v1"
+          vercel deploy --prod --yes \
+            --build-env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            --env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            | tee /tmp/vercel-deploy.out
+          DEPLOYMENT_URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' /tmp/vercel-deploy.out | tail -n 1 || true)"
+          if [ -z "$DEPLOYMENT_URL" ]; then
+            echo "::error::vercel deploy printed no deployment URL"
+            exit 1
+          fi
+          echo "deployment_url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed $DEPLOYMENT_URL"
+
+  verify:
+    name: 3 · Verify
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Smoke this deployment and the production alias
+        env:
+          DEPLOYMENT_URL: ${{ needs.deploy.outputs.deployment_url }}
+          VERCEL_WEB_URL: ${{ secrets.VERCEL_WEB_URL }}
+        run: |
+          set -euo pipefail
+          : "${DEPLOYMENT_URL:?the deploy job produced no deployment_url output}"
+          : "${VERCEL_WEB_URL:?VERCEL_WEB_URL is not set in this environment}"
+          smoke() {
+            local label="$1"
+            local url="${2%/}"
+            local i=1
+            while [ "$i" -le 18 ]; do
+              code="$(curl -sS -o /tmp/web-body -w '%{http_code}' "$url/" || true)"
+              if [ "$code" = "200" ]; then
+                echo "OK $label ($code) after $i attempt(s)"
+                return 0
+              fi
+              echo "attempt $i: $label → $code"
+              i=$((i + 1))
+              sleep 10
+            done
+            echo "::error::Smoke failed for $label ($url)"
+            cat /tmp/web-body || true
+            exit 1
+          }
+          smoke "this deployment" "$DEPLOYMENT_URL"
+          smoke "production alias" "$VERCEL_WEB_URL"
