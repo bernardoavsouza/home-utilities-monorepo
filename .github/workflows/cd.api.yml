@@ -125,6 +125,7 @@ jobs:
           IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
         run: |
           set -euo pipefail
+          : "${DATABASE_URL:?DATABASE_URL is not set in this environment}"
           docker run --rm \
             -e DATABASE_URL \
             "$IMAGE_TAG" \
@@ -145,6 +146,8 @@ jobs:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           set -euo pipefail
+          : "${HOOK:?RENDER_DEPLOY_HOOK_URL is not set in this environment}"
+          : "${RENDER_API_KEY:?RENDER_API_KEY is not set in this environment}"
 
           SERVICE_ID="$(printf '%s' "$HOOK" | sed -n 's#.*/deploy/\(srv-[A-Za-z0-9]*\).*#\1#p')"
           if [ -z "$SERVICE_ID" ]; then
@@ -156,15 +159,23 @@ jobs:
           SVC_CODE="$(curl -sS -o "$SVC_BODY" -w '%{http_code}' \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             "https://api.render.com/v1/services/${SERVICE_ID}" 2>/dev/null || true)"
-          SVC_DESC=""
           case "$SVC_CODE" in
-            2*)
-              if [ -n "$(jq -r '.type // empty' "$SVC_BODY" 2>/dev/null || true)" ]; then
-                SVC_DESC="$(jq -r '"type=\(.type // "?") runtime=\(.serviceDetails.env // "?") image=\(.imageDetails.imagePath // "<none>") repo=\(.repo // "<none>")"' "$SVC_BODY" 2>/dev/null || true)"
-              fi
+            2*) ;;
+            401|403)
+              echo "::error::Render refused RENDER_API_KEY (GET /v1/services/${SERVICE_ID} returned HTTP ${SVC_CODE}). Not firing the deploy hook."
+              exit 1
+              ;;
+            404)
+              echo "::error::Render knows no service ${SERVICE_ID} (HTTP 404) — check the srv-... segment of RENDER_DEPLOY_HOOK_URL. Not firing the deploy hook."
+              exit 1
+              ;;
+            *)
+              echo "::error::Could not describe service ${SERVICE_ID} (HTTP ${SVC_CODE:-000}) — not firing the deploy hook. $(head -c 500 "$SVC_BODY" 2>/dev/null | tr '\n' ' ')"
+              exit 1
               ;;
           esac
-          SVC_DESC="${SVC_DESC:-could not describe service (HTTP ${SVC_CODE:-000})}"
+          SVC_DESC="$(jq -r '"type=\(.type // "?") runtime=\(.serviceDetails.env // "?") image=\(.imageDetails.imagePath // "<none>") repo=\(.repo // "<none>")"' "$SVC_BODY" 2>/dev/null || true)"
+          SVC_DESC="${SVC_DESC:-described, but the response carried no service fields}"
           echo "Service ${SERVICE_ID}: ${SVC_DESC}"
 
           ENCODED="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$IMAGE_URL")"
@@ -226,6 +237,7 @@ jobs:
           DEPLOY_ID: ${{ steps.hook.outputs.deploy_id }}
         run: |
           set -euo pipefail
+          : "${RENDER_API_KEY:?RENDER_API_KEY is not set in this environment}"
           API="https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}"
           STATUS="unknown"
           i=1
@@ -239,7 +251,7 @@ jobs:
             if [ -z "$NEXT" ]; then
               MISSES=$((MISSES + 1))
               echo "check $i: no status from the Render API (${MISSES} in a row)"
-              if [ "$MISSES" -ge 5 ]; then
+              if [ "$MISSES" -ge 20 ]; then
                 echo "status=$STATUS" >> "$GITHUB_OUTPUT"
                 echo "::error::Render API did not answer for ${MISSES} consecutive checks (last known status: $STATUS)"
                 exit 1
