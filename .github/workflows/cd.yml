@@ -437,17 +437,19 @@ jobs:
           USER_NAME="$(jq -r '.user.username // .username // "?"' /tmp/vc-user)"
           echo "token belongs to user ${USER_NAME} (id ${USER_ID})"
 
-          # A secret's *shape* is not the secret. Length and prefix are what
-          # separate a wrong id from a right one pasted short, and neither is
-          # recoverable from the other. Masking hides exactly the difference
-          # that matters here, so it has to be described rather than printed.
+          # A secret's *shape* is not the secret, and masking hides exactly the
+          # difference that matters here, so shape is described rather than
+          # printed. Read the prefix as a hint and nothing more: `prj_` and
+          # `team_` are conventions, and a personal account's org id is a bare
+          # user id carrying no prefix at all, so a missing one is not by itself
+          # a fault. The id comparisons below are the actual evidence.
           shape() {
             case "$1" in
-              "$2"*) echo "starts with '$2', ${#1} chars" ;;
-              *) echo "does NOT start with '$2', ${#1} chars" ;;
+              "$2"*) echo "${#1} chars, starts with '$2'" ;;
+              *) echo "${#1} chars, no '$2' prefix" ;;
             esac
           }
-          echo "VERCEL_ORG_ID: $(shape "$VERCEL_ORG_ID" team_)"
+          echo "VERCEL_ORG_ID: $(shape "$VERCEL_ORG_ID" team_) — expected only for a team; a personal account's org id is unprefixed"
           echo "VERCEL_PROJECT_ID: $(shape "$VERCEL_PROJECT_ID" prj_)"
 
           # 2 · Which accounts can it reach, and how does each relate to the
@@ -524,11 +526,11 @@ jobs:
             if [ -n "$OWNER" ]; then
               echo "\`VERCEL_PROJECT_ID\` is right, but \`VERCEL_ORG_ID\` points at the wrong account."
             else
-              echo "Either \`VERCEL_PROJECT_ID\` is not a project id (it must look like \`prj_...\`,"
-              echo "copied from Project → Settings → General → Project ID), or the token is scoped"
-              echo "to an account that cannot see it. A token's *scope* is chosen when it is created"
-              echo "and is separate from its access level — a full-access token scoped to your"
-              echo "personal account still cannot read a team's projects."
+              echo "Either \`VERCEL_PROJECT_ID\` is not this project's id — copy it from Project →"
+              echo "Settings → General → Project ID, where it normally reads \`prj_…\` — or the token"
+              echo "is scoped to an account that cannot see it. A token's *scope* is chosen when it"
+              echo "is created and is separate from its access level, so a full-access token scoped"
+              echo "to your personal account still cannot read a team's projects."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::error::Vercel could not resolve VERCEL_PROJECT_ID under VERCEL_ORG_ID (HTTP ${CODE:-000})"
