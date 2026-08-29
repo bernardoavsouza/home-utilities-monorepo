@@ -175,7 +175,7 @@ jobs:
           exit 1
 
       - name: Install Vercel CLI
-        run: npm install --global vercel@latest
+        run: npm install --global vercel@59
 
       - name: Deploy Vercel (prod)
         id: deploy
