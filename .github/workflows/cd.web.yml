@@ -186,13 +186,14 @@ jobs:
           RENDER_API_URL: ${{ secrets.RENDER_API_URL }}
         run: |
           set -euo pipefail
+          : "${RENDER_API_URL:?RENDER_API_URL is not set in this environment}"
           API_BASE="${RENDER_API_URL%/}"
           export NEXT_PUBLIC_API_URL="${API_BASE}/v1"
           vercel deploy --prod --yes \
             --build-env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
             --env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
             | tee /tmp/vercel-deploy.out
-          DEPLOYMENT_URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' /tmp/vercel-deploy.out | tail -n 1)"
+          DEPLOYMENT_URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' /tmp/vercel-deploy.out | tail -n 1 || true)"
           if [ -z "$DEPLOYMENT_URL" ]; then
             echo "::error::vercel deploy printed no deployment URL"
             exit 1
@@ -213,6 +214,8 @@ jobs:
           VERCEL_WEB_URL: ${{ secrets.VERCEL_WEB_URL }}
         run: |
           set -euo pipefail
+          : "${DEPLOYMENT_URL:?the deploy job produced no deployment_url output}"
+          : "${VERCEL_WEB_URL:?VERCEL_WEB_URL is not set in this environment}"
           smoke() {
             local label="$1"
             local url="${2%/}"

@@ -299,6 +299,7 @@ jobs:
           RENDER_API_URL: ${{ secrets.RENDER_API_URL }}
         run: |
           set -euo pipefail
+          : "${RENDER_API_URL:?RENDER_API_URL is not set in this environment}"
           BASE="${RENDER_API_URL%/}"
           smoke() {
             local path="$1"
