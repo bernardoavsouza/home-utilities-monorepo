@@ -396,6 +396,105 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
 
+      # `Could not retrieve Project Settings` is one opaque line covering three
+      # different mistakes: a token scoped to an account that cannot see the
+      # project, a VERCEL_ORG_ID that is not the account owning it, and a
+      # VERCEL_PROJECT_ID that does not exist under that account. The CLI never
+      # says which, so the obvious move is to regenerate the token — which fixes
+      # only one of the three. This step asks the REST API those questions
+      # separately, so the failure names the secret to change.
+      #
+      # Nothing here prints a secret, and the masking is itself a signal: GitHub
+      # replaces any secret value that reaches the log with `***`, so the account
+      # id that renders masked is the one VERCEL_ORG_ID holds.
+      - name: Preflight Vercel scope
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+
+          # Prints the HTTP status; the body lands in $1. Deliberately no `-f`:
+          # the body is the only place Vercel explains a refusal.
+          req() {
+            curl -sS -o "$1" -w '%{http_code}' \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              -H 'Accept: application/json' \
+              "https://api.vercel.com$2" 2>/dev/null || true
+          }
+
+          # 1 · Is the token usable at all, and whose is it?
+          CODE="$(req /tmp/vc-user /v2/user)"
+          case "$CODE" in
+            2*) ;;
+            *)
+              echo "::error::VERCEL_TOKEN is not usable (GET /v2/user → HTTP ${CODE:-000}). $(cat /tmp/vc-user 2>/dev/null)"
+              exit 1
+              ;;
+          esac
+          USER_ID="$(jq -r '.user.id // .id // "?"' /tmp/vc-user)"
+          USER_NAME="$(jq -r '.user.username // .username // "?"' /tmp/vc-user)"
+          echo "token belongs to user ${USER_NAME} (id ${USER_ID})"
+
+          # 2 · Which accounts can it reach? A masked id here is VERCEL_ORG_ID.
+          CODE="$(req /tmp/vc-teams '/v2/teams?limit=100')"
+          echo "teams the token can see:"
+          case "$CODE" in
+            2*) jq -r '.teams[]? | "  - \(.id)  \(.slug)"' /tmp/vc-teams || echo "  (none)" ;;
+            *) echo "  (could not list teams — HTTP ${CODE:-000})" ;;
+          esac
+
+          # 3 · Does the project resolve under the configured account?
+          CODE="$(req /tmp/vc-proj "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}")"
+          case "$CODE" in
+            2*)
+              echo "project resolves: $(jq -r '.name // "?"' /tmp/vc-proj)"
+              exit 0
+              ;;
+          esac
+          echo "project did NOT resolve under VERCEL_ORG_ID (HTTP ${CODE:-000}): $(cat /tmp/vc-proj 2>/dev/null)"
+
+          # 4 · Find the account that *does* own it, so the fix is a value the
+          # reader can paste rather than a hunt through the dashboard.
+          OWNER=""
+          if [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}")" = "200" ]; then
+            OWNER="the personal account ${USER_NAME} — set VERCEL_ORG_ID to ${USER_ID}"
+          else
+            for T in $(jq -r '.teams[]?.id' /tmp/vc-teams 2>/dev/null); do
+              if [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${T}")" = "200" ]; then
+                OWNER="a team the token can reach — set VERCEL_ORG_ID to ${T}"
+                break
+              fi
+            done
+          fi
+
+          {
+            echo "### Web deploy failed — Vercel could not resolve the project"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| token | valid, belongs to \`${USER_NAME}\` |"
+            echo "| project under \`VERCEL_ORG_ID\` | HTTP \`${CODE:-000}\` |"
+            if [ -n "$OWNER" ]; then
+              echo "| actually owned by | ${OWNER} |"
+            else
+              echo "| actually owned by | not found under any account this token can reach |"
+            fi
+            echo
+            if [ -n "$OWNER" ]; then
+              echo "\`VERCEL_PROJECT_ID\` is right, but \`VERCEL_ORG_ID\` points at the wrong account."
+            else
+              echo "Either \`VERCEL_PROJECT_ID\` is not a project id (it must look like \`prj_...\`,"
+              echo "copied from Project → Settings → General → Project ID), or the token is scoped"
+              echo "to an account that cannot see it. A token's *scope* is chosen when it is created"
+              echo "and is separate from its access level — a full-access token scoped to your"
+              echo "personal account still cannot read a team's projects."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Vercel could not resolve VERCEL_PROJECT_ID under VERCEL_ORG_ID (HTTP ${CODE:-000})"
+          exit 1
+
       - name: Install Vercel CLI
         run: npm install --global vercel@41
 
