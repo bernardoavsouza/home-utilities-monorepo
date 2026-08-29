@@ -463,7 +463,11 @@ jobs:
             if [ "$T" = "$VERCEL_ORG_ID" ]; then
               REL="matches VERCEL_ORG_ID exactly"
             elif [ "${T#"$VERCEL_ORG_ID"}" != "$T" ] && [ -n "$VERCEL_ORG_ID" ]; then
-              REL="VERCEL_ORG_ID is this id truncated — $(( ${#T} - ${#VERCEL_ORG_ID} )) char(s) missing from the end"
+              # The missing tail is printed because it is the fix, and because
+              # it is the one part masking cannot hide: the id is masked only
+              # for containing VERCEL_ORG_ID, so the characters beyond it are
+              # the only ones that survive — and alone they identify nothing.
+              REL="VERCEL_ORG_ID is this id truncated — append '${T#"$VERCEL_ORG_ID"}' to it ($(( ${#T} - ${#VERCEL_ORG_ID} )) char(s) missing from the end)"
             else
               REL="unrelated to VERCEL_ORG_ID (${#T} chars vs ${#VERCEL_ORG_ID})"
             fi
