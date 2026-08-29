@@ -1,37 +1,5 @@
 name: CD
 
-# One job per stage, chained with `needs:`, so the Actions run page draws the
-# pipeline as a graph instead of one opaque box.
-#
-# The two apps ship on independent tracks that fan out from `resolve` and join
-# again at `release`:
-#
-#   resolve ┬─ image → migrate → deploy-api → verify-api ─┬─ release
-#           └─ deploy-web → verify-web ──────────────┘
-#
-# Inside the API track the order is still load-bearing: the database is migrated
-# before the API rolls, and the rollout is proven `live` before the API is
-# smoked. The web track carries no dependency on the API track on purpose —
-# Vercel builds from source, and `NEXT_PUBLIC_API_URL` points at a stable Render
-# URL rather than at anything this run produces.
-#
-# The parallelism buys a trade, and it is a real one: while the API is still
-# rolling, the new web already serves against the *previous* API, so a tag that
-# changes the HTTP contract is visible to users for the length of the Render
-# rollout. Releases have to keep the contract back-compatible; a release that
-# cannot must re-serialize the tracks by giving `deploy-web` a `needs:
-# verify-api` again.
-#
-# `release` is the join. Every stage already fails closed on its own; this job is
-# the single node that cannot go green unless both tracks did, so it is the one
-# thing to look at to know whether a tag actually shipped.
-#
-# Every stage that reads a deploy secret declares `environment: production`,
-# because that is where those secrets live. A job that omits it does not fail:
-# GitHub resolves `secrets.X` to an empty string and the step runs with a blank
-# value, which surfaces far downstream as a confusing error from whatever
-# consumed it.
-
 on:
   push:
     tags: ['v*']
@@ -169,8 +137,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Migrations run from the image that is about to ship, never as the
-      # container CMD — N containers starting at once must not race the schema.
       - name: Prisma migrate deploy
         run: |
           set -euo pipefail
@@ -188,9 +154,6 @@ jobs:
     environment: production
     timeout-minutes: 40
     steps:
-      # The hook answers with the deploy it just created. That id is the only
-      # thing that makes the rollout observable — without it this step is
-      # fire-and-forget and a failed rollout looks identical to a healthy one.
       - name: Trigger Render deploy
         id: hook
         run: |
@@ -198,26 +161,12 @@ jobs:
           IMAGE_URL="${{ needs.resolve.outputs.image_tag }}"
           HOOK="${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
 
-          # Read the service id before any request: the id is a path segment of
-          # the hook URL, so a malformed hook should fail here by name rather
-          # than downstream as an opaque HTTP error.
           SERVICE_ID="$(printf '%s' "$HOOK" | sed -n 's#.*/deploy/\(srv-[A-Za-z0-9]*\).*#\1#p')"
           if [ -z "$SERVICE_ID" ]; then
             echo "::error::Could not read the service id (srv-...) out of RENDER_DEPLOY_HOOK_URL"
             exit 1
           fi
 
-          # Describe the service before deploying to it. `imgURL` is only
-          # meaningful for an image-backed service; pointed at a repo-backed one
-          # the hook refuses with a bare 400 that reads like a broken URL. This
-          # is reported, not enforced: the hook stays the authority on what it
-          # accepts, and a wrong guess here must not block a working setup.
-          # The HTTP status is read, not discarded: `jq` exits 0 on an error
-          # payload as happily as on a service, and on empty input it exits 0
-          # printing nothing — so a `|| echo` fallback never fires and a 401
-          # renders as `type=?`, indistinguishable from a genuinely repo-backed
-          # service. The hint at the bottom of the failure summary would then
-          # send the reader off to re-create a service that was fine.
           SVC_BODY="$(mktemp)"
           SVC_CODE="$(curl -sS -o "$SVC_BODY" -w '%{http_code}' \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
@@ -225,8 +174,6 @@ jobs:
           SVC_DESC=""
           case "$SVC_CODE" in
             2*)
-              # A present `.type` is the proof this is a service and not an
-              # error payload that happens to be valid JSON.
               if [ -n "$(jq -r '.type // empty' "$SVC_BODY" 2>/dev/null || true)" ]; then
                 SVC_DESC="$(jq -r '"type=\(.type // "?") runtime=\(.serviceDetails.env // "?") image=\(.imageDetails.imagePath // "<none>") repo=\(.repo // "<none>")"' "$SVC_BODY" 2>/dev/null || true)"
               fi
@@ -241,19 +188,9 @@ jobs:
             *) URL="${HOOK}?imgURL=${ENCODED}" ;;
           esac
 
-          # Deliberately no `-f`: it makes curl exit non-zero and drop the body,
-          # and the body is the only place Render says why it refused.
           BODY="$(mktemp)"
-          # `|| true`, never `|| echo 000`: curl's `-w` already prints a status
-          # and adds no trailing newline, so a fallback `echo` is glued onto it
-          # instead of replacing it. A DNS failure would report `000000`, and a
-          # transfer that dies after a good status would report `200000` — which
-          # tests as `>= 300`, calling a deploy that Render *did* accept a
-          # refusal and then never polling the rollout it just started.
           CODE="$(curl -sS -o "$BODY" -w '%{http_code}' -X POST "$URL" || true)"
           RESPONSE="$(cat "$BODY")"
-          # curl prints nothing at all if it dies before write-out, and `[` on an
-          # empty string is a bash error, not a failed comparison.
           case "$CODE" in
             ''|*[!0-9]*)
               echo "::error::curl returned no HTTP status for the deploy hook (got: '${CODE}')"
@@ -350,8 +287,6 @@ jobs:
     environment: production
     timeout-minutes: 15
     steps:
-      # Render already reported `live`; this proves the app answers, not just that
-      # the container started.
       - name: Smoke health + ready
         run: |
           set -euo pipefail
@@ -388,25 +323,11 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.commit }}
 
-      # `package-manager-cache: false` is required: setup-node v5 reads the root
-      # `packageManager` field on its own and shells out to `pnpm store path`,
-      # and this job never installs pnpm.
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
 
-      # `Could not retrieve Project Settings` is one opaque line covering three
-      # different mistakes: a token scoped to an account that cannot see the
-      # project, a VERCEL_ORG_ID that is not the account owning it, and a
-      # VERCEL_PROJECT_ID that does not exist under that account. The CLI never
-      # says which, so the obvious move is to regenerate the token — which fixes
-      # only one of the three. This step asks the REST API those questions
-      # separately, so the failure names the secret to change.
-      #
-      # Nothing here prints a secret, and the masking is itself a signal: GitHub
-      # replaces any secret value that reaches the log with `***`, so the account
-      # id that renders masked is the one VERCEL_ORG_ID holds.
       - name: Preflight Vercel scope
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -415,8 +336,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Prints the HTTP status; the body lands in $1. Deliberately no `-f`:
-          # the body is the only place Vercel explains a refusal.
           req() {
             curl -sS -o "$1" -w '%{http_code}' \
               -H "Authorization: Bearer ${VERCEL_TOKEN}" \
@@ -424,7 +343,6 @@ jobs:
               "https://api.vercel.com$2" 2>/dev/null || true
           }
 
-          # 1 · Is the token usable at all, and whose is it?
           CODE="$(req /tmp/vc-user /v2/user)"
           case "$CODE" in
             2*) ;;
@@ -437,12 +355,6 @@ jobs:
           USER_NAME="$(jq -r '.user.username // .username // "?"' /tmp/vc-user)"
           echo "token belongs to user ${USER_NAME} (id ${USER_ID})"
 
-          # A secret's *shape* is not the secret, and masking hides exactly the
-          # difference that matters here, so shape is described rather than
-          # printed. Read the prefix as a hint and nothing more: `prj_` and
-          # `team_` are conventions, and a personal account's org id is a bare
-          # user id carrying no prefix at all, so a missing one is not by itself
-          # a fault. The id comparisons below are the actual evidence.
           shape() {
             case "$1" in
               "$2"*) echo "${#1} chars, starts with '$2'" ;;
@@ -452,9 +364,6 @@ jobs:
           echo "VERCEL_ORG_ID: $(shape "$VERCEL_ORG_ID" team_) — expected only for a team; a personal account's org id is unprefixed"
           echo "VERCEL_PROJECT_ID: $(shape "$VERCEL_PROJECT_ID" prj_)"
 
-          # 2 · Which accounts can it reach, and how does each relate to the
-          # configured one? A truncated paste and an unrelated id both fail the
-          # same way against the API; only this comparison tells them apart.
           CODE="$(req /tmp/vc-teams '/v2/teams?limit=100')"
           echo "teams the token can see:"
           case "$CODE" in
@@ -465,17 +374,11 @@ jobs:
             if [ "$T" = "$VERCEL_ORG_ID" ]; then
               REL="matches VERCEL_ORG_ID exactly"
             elif [ "${T#"$VERCEL_ORG_ID"}" != "$T" ] && [ -n "$VERCEL_ORG_ID" ]; then
-              # The missing tail is printed because it is the fix, and because
-              # it is the one part masking cannot hide: the id is masked only
-              # for containing VERCEL_ORG_ID, so the characters beyond it are
-              # the only ones that survive — and alone they identify nothing.
               REL="VERCEL_ORG_ID is this id truncated — append '${T#"$VERCEL_ORG_ID"}' to it ($(( ${#T} - ${#VERCEL_ORG_ID} )) char(s) missing from the end)"
             else
               REL="unrelated to VERCEL_ORG_ID (${#T} chars vs ${#VERCEL_ORG_ID})"
             fi
             echo "  - team ${#T} chars — ${REL}"
-            # What the token can actually see in there. A project whose id
-            # renders `***` is the one VERCEL_PROJECT_ID already points at.
             if [ "$(req /tmp/vc-list "/v9/projects?teamId=${T}&limit=100")" = "200" ]; then
               jq -r '.projects[]? | "      · \(.name)  \(.id)"' /tmp/vc-list || true
             else
@@ -483,7 +386,6 @@ jobs:
             fi
           done
 
-          # 3 · Does the project resolve under the configured account?
           CODE="$(req /tmp/vc-proj "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}")"
           case "$CODE" in
             2*)
@@ -493,8 +395,6 @@ jobs:
           esac
           echo "project did NOT resolve under VERCEL_ORG_ID (HTTP ${CODE:-000}): $(cat /tmp/vc-proj 2>/dev/null)"
 
-          # 4 · Find the account that *does* own it, so the fix is a value the
-          # reader can paste rather than a hunt through the dashboard.
           OWNER=""
           if [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}")" = "200" ]; then
             OWNER="the personal account ${USER_NAME} — set VERCEL_ORG_ID to ${USER_ID}"
@@ -506,8 +406,6 @@ jobs:
               fi
             done
           fi
-          # Also to stdout: the step summary is not readable from `gh run view`,
-          # and the conclusion is the whole point of the step.
           echo "owner search: ${OWNER:-not found under any account this token can reach}"
 
           {
@@ -536,22 +434,9 @@ jobs:
           echo "::error::Vercel could not resolve VERCEL_PROJECT_ID under VERCEL_ORG_ID (HTTP ${CODE:-000})"
           exit 1
 
-      # Unpinned on purpose, which is the opposite of the usual advice. Vercel
-      # gates its deploy endpoints on the CLI version *server-side* — the API
-      # started refusing anything below 47.2.2 and the pinned v41 stopped
-      # working mid-flight, without a commit here. A pinned major is therefore
-      # not reproducibility but a scheduled outage, whose date Vercel picks.
-      #
-      # What makes `latest` safe to take is the narrow surface: `deploy --prod
-      # --yes --token --build-env --env` has been stable for many majors, and
-      # the build itself runs on Vercel from the uploaded source, so the CLI
-      # version does not reach anything this repo builds.
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # Deployed from the repo root on purpose: the project's Root Directory
-      # (apps/web) is applied on top of the uploaded source, and the pnpm
-      # workspace needs the root lockfile and packages/ above apps/web.
       - name: Deploy Vercel (prod)
         run: |
           set -euo pipefail
@@ -599,8 +484,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # Reads no secret, so it declares no environment. Its only job is to be the
-      # one node that means "both tracks shipped this tag".
       - name: Summary
         run: |
           {
