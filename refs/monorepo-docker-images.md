@@ -141,6 +141,6 @@ need no host toolchain setup (skip the shared setup action) and build via Buildx
 built rots; the first one in this repo did, which is why it was deleted before these were written.
 Keep the workflows.
 
-PR image workflows still build with `push: false`. **CD** (`.github/workflows/cd.yml`) pushes the
-API image to GHCR on tag `v*` — see `monorepo-deploy.md`. Web production deploys via Vercel’s
+PR image workflows still build with `push: false`. **CD** (`.github/workflows/cd.api.yml`) pushes
+the API image to GHCR on tag `v*` — see `monorepo-deploy.md`. Web production deploys via Vercel’s
 native Next build, not the web Docker image.
