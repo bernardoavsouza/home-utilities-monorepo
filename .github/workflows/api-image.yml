@@ -1,6 +1,5 @@
 name: API image
 
-# Pull requests targeting main only — there is no push trigger.
 on:
   pull_request:
     branches: [main]
@@ -9,7 +8,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Nothing is pushed — this only keeps the Dockerfile from rotting.
 jobs:
   image:
     name: api · docker build

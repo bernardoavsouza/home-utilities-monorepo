@@ -1,6 +1,5 @@
 name: Web tests
 
-# Pull requests targeting main only — there is no push trigger.
 on:
   pull_request:
     branches: [main]
@@ -23,9 +22,6 @@ jobs:
   e2e:
     name: web · playwright
     runs-on: ubuntu-latest
-    # The whole stack runs in this job. There is no deployed API to point at, and
-    # there never needs to be one: Playwright boots the same api + web a developer
-    # runs locally, against the same Postgres image as the API test job.
     env:
       NODE_ENV: production
       DATABASE_URL: postgresql://app:app@localhost:5432/app_test?schema=public
@@ -54,8 +50,6 @@ jobs:
       - name: Migrate
         run: pnpm --filter api db:migrate:test
 
-      # NEXT_PUBLIC_API_URL is inlined into the client bundle here, not read at
-      # run time — see refs/monorepo-docker-images.md.
       - name: Build api + web
         run: pnpm build
 

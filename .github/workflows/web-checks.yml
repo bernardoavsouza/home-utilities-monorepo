@@ -1,6 +1,5 @@
 name: Web checks
 
-# Pull requests targeting main only — there is no push trigger.
 on:
   pull_request:
     branches: [main]
@@ -17,13 +16,9 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
 
-      # `--filter=web` keeps the task graph, so `@packages/contracts#typecheck`
-      # still runs as an upstream dependency — contracts needs no workflow of its own.
       - name: Lint
         run: pnpm exec turbo run lint --filter=web
 
-      # `typecheck` is `next typegen && tsc`: plain tsc fails on a clean checkout
-      # because the generated route types aren't there yet.
       - name: Typecheck
         run: pnpm exec turbo run typecheck --filter=web
 
