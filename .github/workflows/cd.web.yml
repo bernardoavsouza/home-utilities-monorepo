@@ -11,7 +11,7 @@ on:
         type: string
 
 concurrency:
-  group: cd-web-${{ github.event.inputs.tag || github.ref }}
+  group: cd-web-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -23,9 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      tag: ${{ steps.resolve.outputs.tag }}
       commit: ${{ steps.resolve.outputs.commit }}
-      short_sha: ${{ steps.resolve.outputs.short_sha }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -37,13 +35,16 @@ jobs:
           tag: ${{ github.event.inputs.tag }}
 
       - name: Summary
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          SHORT_SHA: ${{ steps.resolve.outputs.short_sha }}
         run: |
           {
-            echo "### Deploying web \`${{ steps.resolve.outputs.tag }}\`"
+            echo "### Deploying web \`${TAG}\`"
             echo
             echo "| | |"
             echo "|---|---|"
-            echo "| commit | \`${{ steps.resolve.outputs.short_sha }}\` |"
+            echo "| commit | \`${SHORT_SHA}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
@@ -52,6 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 30
+    outputs:
+      deployment_url: ${{ steps.deploy.outputs.deployment_url }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -175,18 +178,27 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Deploy Vercel (prod)
-        run: |
-          set -euo pipefail
-          API_BASE="${{ secrets.RENDER_API_URL }}"
-          API_BASE="${API_BASE%/}"
-          export NEXT_PUBLIC_API_URL="${API_BASE}/v1"
-          vercel deploy --prod --yes \
-            --token="${{ secrets.VERCEL_TOKEN }}" \
-            --build-env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
-            --env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
+        id: deploy
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          RENDER_API_URL: ${{ secrets.RENDER_API_URL }}
+        run: |
+          set -euo pipefail
+          API_BASE="${RENDER_API_URL%/}"
+          export NEXT_PUBLIC_API_URL="${API_BASE}/v1"
+          vercel deploy --prod --yes \
+            --build-env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            --env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            | tee /tmp/vercel-deploy.out
+          DEPLOYMENT_URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' /tmp/vercel-deploy.out | tail -n 1)"
+          if [ -z "$DEPLOYMENT_URL" ]; then
+            echo "::error::vercel deploy printed no deployment URL"
+            exit 1
+          fi
+          echo "deployment_url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed $DEPLOYMENT_URL"
 
   verify:
     name: 3 · Verify
@@ -195,22 +207,29 @@ jobs:
     environment: production
     timeout-minutes: 15
     steps:
-      - name: Smoke web home
+      - name: Smoke this deployment and the production alias
+        env:
+          DEPLOYMENT_URL: ${{ needs.deploy.outputs.deployment_url }}
+          VERCEL_WEB_URL: ${{ secrets.VERCEL_WEB_URL }}
         run: |
           set -euo pipefail
-          WEB="${{ secrets.VERCEL_WEB_URL }}"
-          WEB="${WEB%/}"
-          i=1
-          while [ "$i" -le 18 ]; do
-            code="$(curl -sS -o /tmp/web-body -w '%{http_code}' "$WEB/" || true)"
-            if [ "$code" = "200" ]; then
-              echo "OK web home ($code) after $i attempt(s)"
-              exit 0
-            fi
-            echo "attempt $i: web → $code"
-            i=$((i + 1))
-            sleep 10
-          done
-          echo "::error::Smoke failed for web home"
-          cat /tmp/web-body || true
-          exit 1
+          smoke() {
+            local label="$1"
+            local url="${2%/}"
+            local i=1
+            while [ "$i" -le 18 ]; do
+              code="$(curl -sS -o /tmp/web-body -w '%{http_code}' "$url/" || true)"
+              if [ "$code" = "200" ]; then
+                echo "OK $label ($code) after $i attempt(s)"
+                return 0
+              fi
+              echo "attempt $i: $label → $code"
+              i=$((i + 1))
+              sleep 10
+            done
+            echo "::error::Smoke failed for $label ($url)"
+            cat /tmp/web-body || true
+            exit 1
+          }
+          smoke "this deployment" "$DEPLOYMENT_URL"
+          smoke "production alias" "$VERCEL_WEB_URL"
