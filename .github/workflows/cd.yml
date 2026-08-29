@@ -536,8 +536,18 @@ jobs:
           echo "::error::Vercel could not resolve VERCEL_PROJECT_ID under VERCEL_ORG_ID (HTTP ${CODE:-000})"
           exit 1
 
+      # Unpinned on purpose, which is the opposite of the usual advice. Vercel
+      # gates its deploy endpoints on the CLI version *server-side* — the API
+      # started refusing anything below 47.2.2 and the pinned v41 stopped
+      # working mid-flight, without a commit here. A pinned major is therefore
+      # not reproducibility but a scheduled outage, whose date Vercel picks.
+      #
+      # What makes `latest` safe to take is the narrow surface: `deploy --prod
+      # --yes --token --build-env --env` has been stable for many majors, and
+      # the build itself runs on Vercel from the uploaded source, so the CLI
+      # version does not reach anything this repo builds.
       - name: Install Vercel CLI
-        run: npm install --global vercel@41
+        run: npm install --global vercel@latest
 
       # Deployed from the repo root on purpose: the project's Root Directory
       # (apps/web) is applied on top of the uploaded source, and the pnpm
