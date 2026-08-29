@@ -72,6 +72,9 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
+          : "${VERCEL_TOKEN:?VERCEL_TOKEN is not set in this environment}"
+          : "${VERCEL_ORG_ID:?VERCEL_ORG_ID is not set in this environment}"
+          : "${VERCEL_PROJECT_ID:?VERCEL_PROJECT_ID is not set in this environment}"
 
           req() {
             curl -sS -o "$1" -w '%{http_code}' \
@@ -92,37 +95,6 @@ jobs:
           USER_NAME="$(jq -r '.user.username // .username // "?"' /tmp/vc-user)"
           echo "token belongs to user ${USER_NAME} (id ${USER_ID})"
 
-          shape() {
-            case "$1" in
-              "$2"*) echo "${#1} chars, starts with '$2'" ;;
-              *) echo "${#1} chars, no '$2' prefix" ;;
-            esac
-          }
-          echo "VERCEL_ORG_ID: $(shape "$VERCEL_ORG_ID" team_) — expected only for a team; a personal account's org id is unprefixed"
-          echo "VERCEL_PROJECT_ID: $(shape "$VERCEL_PROJECT_ID" prj_)"
-
-          CODE="$(req /tmp/vc-teams '/v2/teams?limit=100')"
-          echo "teams the token can see:"
-          case "$CODE" in
-            2*) ;;
-            *) echo "  (could not list teams — HTTP ${CODE:-000})" ;;
-          esac
-          for T in $(jq -r '.teams[]?.id' /tmp/vc-teams 2>/dev/null); do
-            if [ "$T" = "$VERCEL_ORG_ID" ]; then
-              REL="matches VERCEL_ORG_ID exactly"
-            elif [ "${T#"$VERCEL_ORG_ID"}" != "$T" ] && [ -n "$VERCEL_ORG_ID" ]; then
-              REL="VERCEL_ORG_ID is this id truncated — append '${T#"$VERCEL_ORG_ID"}' to it ($(( ${#T} - ${#VERCEL_ORG_ID} )) char(s) missing from the end)"
-            else
-              REL="unrelated to VERCEL_ORG_ID (${#T} chars vs ${#VERCEL_ORG_ID})"
-            fi
-            echo "  - team ${#T} chars — ${REL}"
-            if [ "$(req /tmp/vc-list "/v9/projects?teamId=${T}&limit=100")" = "200" ]; then
-              jq -r '.projects[]? | "      · \(.name)  \(.id)"' /tmp/vc-list || true
-            else
-              echo "      (cannot list this team's projects with this token)"
-            fi
-          done
-
           CODE="$(req /tmp/vc-proj "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}")"
           case "$CODE" in
             2*)
@@ -132,8 +104,25 @@ jobs:
           esac
           echo "project did NOT resolve under VERCEL_ORG_ID (HTTP ${CODE:-000}): $(cat /tmp/vc-proj 2>/dev/null)"
 
+          shape() {
+            case "$1" in
+              "$2"*) echo "${#1} chars, starts with '$2'" ;;
+              *) echo "${#1} chars, no '$2' prefix" ;;
+            esac
+          }
+          echo "VERCEL_ORG_ID: $(shape "$VERCEL_ORG_ID" team_) — expected only for a team; a personal account's org id is unprefixed"
+          echo "VERCEL_PROJECT_ID: $(shape "$VERCEL_PROJECT_ID" prj_)"
+
+          if [ "$(req /tmp/vc-teams '/v2/teams?limit=100')" != "200" ]; then
+            echo "could not list the teams this token can reach — the owner search below may come up empty"
+          fi
+
           OWNER=""
           for T in $(jq -r '.teams[]?.id' /tmp/vc-teams 2>/dev/null); do
+            if [ "$T" != "$VERCEL_ORG_ID" ] && [ "${T#"$VERCEL_ORG_ID"}" != "$T" ]; then
+              echo "a reachable team id starts with VERCEL_ORG_ID — the secret looks truncated by $(( ${#T} - ${#VERCEL_ORG_ID} )) char(s) at the end"
+            fi
+
             if [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${T}")" = "200" ]; then
               OWNER="a team the token can reach — set VERCEL_ORG_ID to ${T}"
               break
@@ -141,7 +130,7 @@ jobs:
           done
           if [ -z "$OWNER" ] && [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}")" = "200" ]; then
             if [ "$VERCEL_ORG_ID" = "$USER_ID" ]; then
-              OWNER="the token's default scope. VERCEL_ORG_ID is already the user id and the API rejects a user id as teamId — use the team id listed above"
+              OWNER="the token's default scope. VERCEL_ORG_ID is already the user id and the API rejects a user id as teamId — use the Team ID from Vercel → Settings → General"
             else
               OWNER="the personal account ${USER_NAME} — set VERCEL_ORG_ID to ${USER_ID}"
             fi
