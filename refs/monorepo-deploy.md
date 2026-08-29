@@ -1,6 +1,6 @@
 # Monorepo — Deploy (CD)
 
-> **Status:** stable · **Reviewed:** 2026-08-26 · **Source:** monorepo-boilerplate@fix/cd-production-environment
+> **Status:** stable · **Reviewed:** 2026-08-27 · **Source:** monorepo-boilerplate@fix/cd-render-hook-diagnostics
 
 > **Altitude:** repo ref. File/class/script names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -33,30 +33,59 @@ Each stage is its own **job**, chained with `needs:`, so the run page draws the 
 names the stage that failed. Stages run on separate runners: anything one stage passes to the next
 travels through job `outputs` or GHCR, never the workspace.
 
-| Job | Stage | What |
+**The two apps ship on independent tracks.** They fan out from `resolve` and join at `release`:
+
+```
+resolve ┬─ image → migrate → deploy-api → verify-api ─┬─ release
+        └─ deploy-web → verify-web ──────────────┘
+```
+
+| Job | Track | What |
 |---|---|---|
-| `resolve` | 1 | Resolve tag + short SHA; assert commit ⊆ `origin/main` |
-| `image` | 2 | Build & push API image to GHCR |
-| `migrate` | 3 | One-shot `prisma migrate deploy` from that image against Neon |
-| `deploy-api` | 4 | Render deploy hook with `imgURL` = GHCR tag, **then poll the deploy to `live`** |
-| `verify-api` | 5 | Smoke API (`/v1/health`, `/v1/health/ready`) with retries — cold start |
-| `deploy-web` | 6 | Vercel production deploy of web (native Next build) |
-| `verify-web` | 7 | Smoke web home |
+| `resolve` | shared | Resolve tag + short SHA; assert commit ⊆ `origin/main` |
+| `image` | API 1 | Build & push API image to GHCR |
+| `migrate` | API 2 | One-shot `prisma migrate deploy` from that image against Neon |
+| `deploy-api` | API 3 | Render deploy hook with `imgURL` = GHCR tag, **then poll the deploy to `live`** |
+| `verify-api` | API 4 | Smoke API (`/v1/health`, `/v1/health/ready`) with retries — cold start |
+| `deploy-web` | Web 1 | Vercel production deploy of web (native Next build) |
+| `verify-web` | Web 2 | Smoke web home |
+| `release` | join | Nothing but a summary; cannot go green unless **both** tracks did |
+
+Order is load-bearing **within** the API track — migrate before the roll, rollout proven `live` before
+the smoke — and absent **between** the tracks. `deploy-web` needs only `resolve`: Vercel builds from
+source, and `NEXT_PUBLIC_API_URL` is built from `RENDER_API_URL`, a stable public URL that does not
+name anything this run produced.
+
+**The trade the parallel graph makes.** While the API is still rolling, the new web is already serving
+against the **previous** API. A tag that changes the HTTP contract is therefore visible to users for
+the length of the Render rollout (minutes). Releases have to keep the contract back-compatible; a
+release that cannot must re-serialize the tracks by giving `deploy-web` a `needs: verify-api` again.
+
+`release` is the only leaf of the graph. Every stage fails closed on its own, so the run is red if any
+stage fails; `release` exists so that one node answers "did this tag actually ship, both halves of it".
 
 Migrate is **never** the container `CMD` / startup — same contract as `monorepo-docker-images.md`.
 
 ### Knowing whether the API actually rolled out
 
 The deploy hook is fire-and-forget: it returns as soon as Render accepts the request, so on its own a
-failed rollout and a healthy one look identical. Stage 4 therefore reads the deploy id out of the hook
+failed rollout and a healthy one look identical. `deploy-api` therefore reads the deploy id out of the hook
 response (`.deploy.id`) and polls `GET /v1/services/{service}/deploys/{deploy}` until it reports
 `live`, failing on `build_failed`, `update_failed`, `pre_deploy_failed`, `canceled` or `deactivated`.
 
 The service id is parsed from the `srv-…` segment of `RENDER_DEPLOY_HOOK_URL`, so it needs no secret of
-its own; the poll needs `RENDER_API_KEY`.
+its own. `RENDER_API_KEY` is used twice in that job: once **before** the hook, to describe the service
+(`GET /v1/services/{id}`) so a refusal can name what it was pointed at, and then for the rollout poll.
 
-Stage 5 is **not** redundant with this. Stage 4 answers "did Render finish rolling this deploy out";
-stage 5 answers "does the app respond". A smoke test alone cannot tell a new version from the previous
+Both of those reads check the HTTP status rather than trusting the body. `jq` exits 0 on an error
+payload and on empty input alike, so a `401` parsed blind renders as `type=?` — which reads exactly
+like a correctly-authenticated look at a misconfigured service. Likewise the hook's status is captured
+with `|| true`, never `|| echo 000`: `curl -w '%{http_code}'` writes no trailing newline, so a fallback
+`echo` is glued onto the real status instead of replacing it (`200` + `000` = `200000`, which tests as
+`>= 300` and would call an accepted deploy a refusal).
+
+`verify-api` is **not** redundant with this. `deploy-api` answers "did Render finish rolling this deploy
+out"; `verify-api` answers "does the app respond". A smoke test alone cannot tell a new version from the previous
 one still serving traffic, which is why the rollout gate comes first.
 
 ## GHCR (API image)
@@ -71,8 +100,9 @@ one still serving traffic, which is why the rollout gate comes first.
 ## GitHub Actions secrets
 
 These are **environment** secrets on the `production` environment, not repo-level ones, so
-every job that reads one declares `environment: production` — stages 3 through 7. Stages 1 and 2
-do not: `resolve` reads no secret and `image` uses only `GITHUB_TOKEN`, which needs no environment.
+every job that reads one declares `environment: production` — `migrate`, `deploy-api`, `verify-api`,
+`deploy-web` and `verify-web`. The other three do not: `resolve` and `release` read no secret, and
+`image` uses only `GITHUB_TOKEN`, which needs no environment.
 
 **A job that omits the key does not fail.** GitHub resolves `secrets.X` to an empty string for a
 secret the job cannot see — no error, no warning — and the blank value surfaces later as an error
@@ -83,7 +113,7 @@ workflow change, not just a dashboard change.
 |---|---|
 | `DATABASE_URL` | Neon URL for the migrate step in GHA |
 | `RENDER_DEPLOY_HOOK_URL` | Render deploy hook (CD appends `imgURL`); the `srv-…` segment is also the service id |
-| `RENDER_API_KEY` | Render REST API — polls the triggered deploy until `live` (stage 4) |
+| `RENDER_API_KEY` | Render REST API — describes the service before the hook, then polls the triggered deploy until `live` (`deploy-api`) |
 | `RENDER_API_URL` | Public API base (`*.onrender.com`) — smoke + build `NEXT_PUBLIC_API_URL` |
 | `VERCEL_TOKEN` | Vercel CLI deploy |
 | `VERCEL_ORG_ID` | Vercel CLI |
