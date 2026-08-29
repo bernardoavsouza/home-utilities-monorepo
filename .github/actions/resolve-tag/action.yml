@@ -1,0 +1,59 @@
+name: Resolve tag
+description: Resolve the tag being deployed to a commit and assert that commit is on origin/main.
+
+inputs:
+  tag:
+    description: Tag to deploy. Falls back to the pushed ref when empty.
+    required: false
+    default: ''
+
+outputs:
+  tag:
+    description: The resolved tag.
+    value: ${{ steps.meta.outputs.tag }}
+  commit:
+    description: Commit the tag points at.
+    value: ${{ steps.meta.outputs.commit }}
+  short_sha:
+    description: Seven-character short sha of that commit.
+    value: ${{ steps.meta.outputs.short_sha }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve tag
+      id: meta
+      shell: bash
+      run: |
+        set -euo pipefail
+        TAG="${{ inputs.tag }}"
+        if [ -z "$TAG" ]; then
+          TAG="${GITHUB_REF_NAME}"
+        fi
+        case "$TAG" in
+          v*) ;;
+          *)
+            echo "::error::Tag must match v* (got: $TAG)"
+            exit 1
+            ;;
+        esac
+        if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+          git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
+        fi
+        COMMIT="$(git rev-list -n 1 "$TAG")"
+        SHORT_SHA="$(git rev-parse --short=7 "$COMMIT")"
+        {
+          echo "tag=$TAG"
+          echo "commit=$COMMIT"
+          echo "short_sha=$SHORT_SHA"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Assert tag commit is on origin/main
+      shell: bash
+      run: |
+        set -euo pipefail
+        git fetch origin main
+        if ! git merge-base --is-ancestor "${{ steps.meta.outputs.commit }}" origin/main; then
+          echo "::error::Commit ${{ steps.meta.outputs.commit }} (tag ${{ steps.meta.outputs.tag }}) is not on origin/main"
+          exit 1
+        fi

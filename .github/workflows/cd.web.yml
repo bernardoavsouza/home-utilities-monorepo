@@ -1,0 +1,216 @@
+name: CD · Web
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing git tag to redeploy (e.g. v1.2.3). Required for dispatch.
+        required: true
+        type: string
+
+concurrency:
+  group: cd-web-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: 1 · Resolve tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      commit: ${{ steps.resolve.outputs.commit }}
+      short_sha: ${{ steps.resolve.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: resolve
+        uses: ./.github/actions/resolve-tag
+        with:
+          tag: ${{ github.event.inputs.tag }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deploying web \`${{ steps.resolve.outputs.tag }}\`"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| commit | \`${{ steps.resolve.outputs.short_sha }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: 2 · Deploy (Vercel)
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Preflight Vercel scope
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+
+          req() {
+            curl -sS -o "$1" -w '%{http_code}' \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              -H 'Accept: application/json' \
+              "https://api.vercel.com$2" 2>/dev/null || true
+          }
+
+          CODE="$(req /tmp/vc-user /v2/user)"
+          case "$CODE" in
+            2*) ;;
+            *)
+              echo "::error::VERCEL_TOKEN is not usable (GET /v2/user → HTTP ${CODE:-000}). $(cat /tmp/vc-user 2>/dev/null)"
+              exit 1
+              ;;
+          esac
+          USER_ID="$(jq -r '.user.id // .id // "?"' /tmp/vc-user)"
+          USER_NAME="$(jq -r '.user.username // .username // "?"' /tmp/vc-user)"
+          echo "token belongs to user ${USER_NAME} (id ${USER_ID})"
+
+          shape() {
+            case "$1" in
+              "$2"*) echo "${#1} chars, starts with '$2'" ;;
+              *) echo "${#1} chars, no '$2' prefix" ;;
+            esac
+          }
+          echo "VERCEL_ORG_ID: $(shape "$VERCEL_ORG_ID" team_) — expected only for a team; a personal account's org id is unprefixed"
+          echo "VERCEL_PROJECT_ID: $(shape "$VERCEL_PROJECT_ID" prj_)"
+
+          CODE="$(req /tmp/vc-teams '/v2/teams?limit=100')"
+          echo "teams the token can see:"
+          case "$CODE" in
+            2*) ;;
+            *) echo "  (could not list teams — HTTP ${CODE:-000})" ;;
+          esac
+          for T in $(jq -r '.teams[]?.id' /tmp/vc-teams 2>/dev/null); do
+            if [ "$T" = "$VERCEL_ORG_ID" ]; then
+              REL="matches VERCEL_ORG_ID exactly"
+            elif [ "${T#"$VERCEL_ORG_ID"}" != "$T" ] && [ -n "$VERCEL_ORG_ID" ]; then
+              REL="VERCEL_ORG_ID is this id truncated — append '${T#"$VERCEL_ORG_ID"}' to it ($(( ${#T} - ${#VERCEL_ORG_ID} )) char(s) missing from the end)"
+            else
+              REL="unrelated to VERCEL_ORG_ID (${#T} chars vs ${#VERCEL_ORG_ID})"
+            fi
+            echo "  - team ${#T} chars — ${REL}"
+            if [ "$(req /tmp/vc-list "/v9/projects?teamId=${T}&limit=100")" = "200" ]; then
+              jq -r '.projects[]? | "      · \(.name)  \(.id)"' /tmp/vc-list || true
+            else
+              echo "      (cannot list this team's projects with this token)"
+            fi
+          done
+
+          CODE="$(req /tmp/vc-proj "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}")"
+          case "$CODE" in
+            2*)
+              echo "project resolves: $(jq -r '.name // "?"' /tmp/vc-proj)"
+              exit 0
+              ;;
+          esac
+          echo "project did NOT resolve under VERCEL_ORG_ID (HTTP ${CODE:-000}): $(cat /tmp/vc-proj 2>/dev/null)"
+
+          OWNER=""
+          for T in $(jq -r '.teams[]?.id' /tmp/vc-teams 2>/dev/null); do
+            if [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}?teamId=${T}")" = "200" ]; then
+              OWNER="a team the token can reach — set VERCEL_ORG_ID to ${T}"
+              break
+            fi
+          done
+          if [ -z "$OWNER" ] && [ "$(req /tmp/vc-try "/v9/projects/${VERCEL_PROJECT_ID}")" = "200" ]; then
+            if [ "$VERCEL_ORG_ID" = "$USER_ID" ]; then
+              OWNER="the token's default scope. VERCEL_ORG_ID is already the user id and the API rejects a user id as teamId — use the team id listed above"
+            else
+              OWNER="the personal account ${USER_NAME} — set VERCEL_ORG_ID to ${USER_ID}"
+            fi
+          fi
+          echo "owner search: ${OWNER:-not found under any account this token can reach}"
+
+          {
+            echo "### Web deploy failed — Vercel could not resolve the project"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| token | valid, belongs to \`${USER_NAME}\` |"
+            echo "| project under \`VERCEL_ORG_ID\` | HTTP \`${CODE:-000}\` |"
+            if [ -n "$OWNER" ]; then
+              echo "| actually owned by | ${OWNER} |"
+            else
+              echo "| actually owned by | not found under any account this token can reach |"
+            fi
+            echo
+            if [ -n "$OWNER" ]; then
+              echo "\`VERCEL_PROJECT_ID\` is right, but \`VERCEL_ORG_ID\` points at the wrong account."
+            else
+              echo "Either \`VERCEL_PROJECT_ID\` is not this project's id — copy it from Project →"
+              echo "Settings → General → Project ID, where it normally reads \`prj_…\` — or the token"
+              echo "is scoped to an account that cannot see it. A token's *scope* is chosen when it"
+              echo "is created and is separate from its access level, so a full-access token scoped"
+              echo "to your personal account still cannot read a team's projects."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Vercel could not resolve VERCEL_PROJECT_ID under VERCEL_ORG_ID (HTTP ${CODE:-000})"
+          exit 1
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Deploy Vercel (prod)
+        run: |
+          set -euo pipefail
+          API_BASE="${{ secrets.RENDER_API_URL }}"
+          API_BASE="${API_BASE%/}"
+          export NEXT_PUBLIC_API_URL="${API_BASE}/v1"
+          vercel deploy --prod --yes \
+            --token="${{ secrets.VERCEL_TOKEN }}" \
+            --build-env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            --env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  verify:
+    name: 3 · Verify
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Smoke web home
+        run: |
+          set -euo pipefail
+          WEB="${{ secrets.VERCEL_WEB_URL }}"
+          WEB="${WEB%/}"
+          i=1
+          while [ "$i" -le 18 ]; do
+            code="$(curl -sS -o /tmp/web-body -w '%{http_code}' "$WEB/" || true)"
+            if [ "$code" = "200" ]; then
+              echo "OK web home ($code) after $i attempt(s)"
+              exit 0
+            fi
+            echo "attempt $i: web → $code"
+            i=$((i + 1))
+            sleep 10
+          done
+          echo "::error::Smoke failed for web home"
+          cat /tmp/web-body || true
+          exit 1
