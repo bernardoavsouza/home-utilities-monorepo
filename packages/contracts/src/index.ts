@@ -42,16 +42,6 @@ export type {
   UpdateTransactionRequest,
 } from './transaction.js';
 export type {
-  CreateDebtRequest,
-  DebtDetail,
-  DebtStatus,
-  DebtSummary,
-  DebtsPanelCurrencyTotals,
-  DebtsPanelResponse,
-  RegisterDebtPaymentRequest,
-  RegisterDebtPaymentResponse,
-} from './debts.js';
-export type {
   ProjectionHorizonMonths,
   ProjectionMonthPoint,
   ProjectionQuery,

@@ -3,7 +3,6 @@ import {
   exampleAuthSession,
   exampleBudgetHome,
   exampleDashboard,
-  exampleDebtsPanel,
   exampleMoney,
   exampleProjection,
   exampleTransaction,
@@ -32,11 +31,7 @@ describe('api-contracts panel fixtures', () => {
     expect(exampleTransaction.postingId).toBe('post-1');
   });
 
-  it('exposes debts, projection, and dashboard panels', () => {
-    expect(exampleDebtsPanel.totalsByCurrency).toHaveLength(1);
-    expect(exampleDebtsPanel.totalsByCurrency[0]?.principal).toBe(100_000);
-    expect(exampleDebtsPanel.totalsByCurrency[0]?.balance).toBe(75_000);
-    expect(exampleDebtsPanel.debts).toHaveLength(1);
+  it('exposes projection and dashboard panels', () => {
     expect(exampleProjection.horizonMonths).toBe(3);
     expect(exampleProjection.points).toHaveLength(1);
     expect(exampleDashboard.overspent).toBe(false);

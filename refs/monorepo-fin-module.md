@@ -95,7 +95,7 @@ paths as `fin/…` so the public surface is `/v1/fin/…`. Health stays `/v1/hea
 
 | Rule | Detail |
 |---|---|
-| Ownership | Budget, income, transaction/posting, debts, projection, and dashboard panel types are **fin module** contracts |
+| Ownership | Budget, income, transaction/posting, projection, and dashboard panel types are **fin module** contracts. Debts panel types are deferred until a dedicated debts ticket (not in contracts today). |
 | Shared (not fin-owned) | `Money` and `CurrencyCode` stay in `packages/contracts/src/money.ts` — shared primitives any module may use |
 | New fin types | Put them under `packages/contracts/src/fin/` **and** prefix type names with `Fin` (`FinCategory`, `FinBudgetHomeResponse`). The package entry point re-exports flat (`import type { … } from '@packages/contracts'`), so the folder alone is not a consumer-facing namespace — the `Fin` prefix is the collision boundary |
 | Migration trigger | Existing files (`budget.ts`, `income.ts`, `dashboard.ts`, …) predate this boundary. Migrate each file into `src/fin/` **and** rename exported types to `Fin*` in the **same PR** that creates the Nest endpoint for that panel |

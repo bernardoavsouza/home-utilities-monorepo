@@ -5,12 +5,10 @@ import type {
   BudgetHomeResponse,
   BudgetMonth,
   BudgetTransaction,
-  CreateDebtRequest,
   CreateIncomeRequest,
   CreateTransactionRequest,
   CurrencyCode,
   DashboardResponse,
-  DebtsPanelResponse,
   DeleteTransactionResponse,
   IncomeListResponse,
   LoginRequest,
@@ -19,8 +17,6 @@ import type {
   MoveMoneyRequest,
   MoveMoneyResponse,
   ProjectionResponse,
-  RegisterDebtPaymentRequest,
-  RegisterDebtPaymentResponse,
   SignupRequest,
   TransactionListResponse,
 } from '@packages/contracts';
@@ -177,51 +173,6 @@ export const exampleDeleteTransaction = {
   id: 'txn-1',
   reversedPostingId: 'post-2',
 } satisfies DeleteTransactionResponse;
-
-export const exampleDebtsPanel = {
-  totalsByCurrency: [
-    {
-      currency: asCurrency('BRL'),
-      principal: 100_000,
-      balance: 75_000,
-    },
-  ],
-  debts: [
-    {
-      id: 'debt-1',
-      name: 'Card',
-      status: 'active',
-      principal: money(100_000),
-      balance: money(75_000),
-    },
-  ],
-} satisfies DebtsPanelResponse;
-
-export const exampleCreateDebt = {
-  name: 'Card',
-  principal: money(100_000),
-  balance: money(100_000),
-} satisfies CreateDebtRequest;
-
-export const exampleRegisterDebtPayment = {
-  amount: money(5_000),
-  occurredOn: '2026-08-15',
-  note: 'Extra payment',
-} satisfies RegisterDebtPaymentRequest;
-
-export const exampleRegisterDebtPaymentResponse = {
-  debt: {
-    id: 'debt-1',
-    name: 'Card',
-    status: 'active',
-    principal: money(100_000),
-    balance: money(70_000),
-    notes: null,
-    openedOn: '2026-01-01',
-    dueOn: null,
-  },
-  postingId: 'post-debt-1',
-} satisfies RegisterDebtPaymentResponse;
 
 export const exampleProjection = {
   currency: asCurrency('BRL'),

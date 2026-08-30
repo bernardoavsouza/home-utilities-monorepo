@@ -16,12 +16,13 @@ Panel and action payloads for the MVP live here (per tela/painel), not as generi
 Nest response DTOs `implements` these types when endpoints land; until then the package is the
 source of truth and web proves consumption via typed fixtures.
 
-Financial panel types (budget, income, transaction, debts, projection, dashboard) are owned
+Financial panel types (budget, income, transaction, projection, dashboard) are owned
 by the **fin module** — see `monorepo-fin-module.md`. `Money` / `CurrencyCode` stay shared in
-`money.ts`. Existing panel files (`budget.ts`, `dashboard.ts`, …) predate that boundary;
-migrate each into `packages/contracts/src/fin/` and rename exported types to `Fin*` in the
-same PR that creates the Nest endpoint for that panel. The package entry point re-exports
-flat, so the `Fin` type prefix is the collision boundary (not the folder alone).
+`money.ts`. Debts panel contracts are **not** in this package until a dedicated debts ticket.
+Existing panel files (`budget.ts`, `dashboard.ts`, …) predate that boundary; migrate each into
+`packages/contracts/src/fin/` and rename exported types to `Fin*` in the same PR that creates
+the Nest endpoint for that panel. The package entry point re-exports flat, so the `Fin` type
+prefix is the collision boundary (not the folder alone).
 
 ## Current surface
 
@@ -38,7 +39,6 @@ flat, so the `Fin` type prefix is the collision boundary (not the folder alone).
 | Budget home / assign / move-money | `packages/contracts/src/budget.ts` | Panel view-model + assign/move-money; branded `BudgetMonth` (`YYYY-MM`); boolean `overspent` on lines; monetary `overspentAmount` on totals |
 | Income | `packages/contracts/src/income.ts` | Entry + create/update + list |
 | Txn / posting view | `packages/contracts/src/transaction.ts` | Transaction with `postingId` + create/update/delete/list |
-| Debts panel | `packages/contracts/src/debts.ts` | Panel list + `totalsByCurrency[]` (no single panel currency) + create + register payment |
 | Projection | `packages/contracts/src/projection.ts` | Horizon query + series; `horizonMonths` is `ProjectionHorizonMonths` (`3\|6\|12`) on query and response |
 | Dashboard | `packages/contracts/src/dashboard.ts` | Month summary + boolean `overspent` + `byGroup` breakdown |
 
@@ -79,11 +79,8 @@ Panel Nest DTOs are **not** wired yet — they arrive with the endpoint tickets 
   template-literal brand. Runtime format checks belong to later API tickets.
 - **`overspent` vs `overspentAmount`.** Boolean flags stay named `overspent` (category line,
   dashboard). The budget-home monetary total is `overspentAmount: Money`.
-- **Debts panel totals are per currency.** `DebtsPanelResponse.totalsByCurrency` is
-  `Array<{ currency; principal; balance }>` where `principal` / `balance` are `amountMinor`
-  numbers under that row's single `currency` — not nested `Money`, so currency cannot drift.
-  There is no single panel `currency` / aggregated cross-currency total — clients must not sum
-  across currencies without an FX contract.
+- **No debts panel contracts yet.** Dívidas ficam fora de `@packages/contracts` até o ticket
+  próprio (PP-46 colocou painel de dívidas fora do epic `fin` MVP).
 - **`ApiErrorBody.code` / `fields` are optional.** The exception filter includes them only when
   `code` is a string and `fields` is a non-empty `Record<string, string[]>`; malformed or empty
   `{}` values are omitted.
