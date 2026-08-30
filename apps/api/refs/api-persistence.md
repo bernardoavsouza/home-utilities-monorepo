@@ -30,11 +30,11 @@ parses the schema text and returns one violation per missing map; its spec asser
 schema is clean. So an unmapped `camelCase` identifier **fails `pnpm test`**, in CI too — this
 is a gate, not a style suggestion.
 
-### Financial applet tables
+### Financial module tables
 
-When domain models land, every fin table/enum uses the `fin_` prefix on the Postgres side
-(e.g. model `FinAccount` → `@@map("fin_accounts")`). Full boundary:
-`../../../refs/monorepo-fin-applet.md`. No bare `accounts` / `budgets` / `categories` tables.
+Fin tables and enums use the `fin_` prefix on the Postgres side (model `FinAccount` →
+`@@map("fin_accounts")`). There are no bare `accounts` / `budgets` / `categories` tables.
+Full boundary: `../../../refs/monorepo-fin-module.md`.
 
 ## Commands
 

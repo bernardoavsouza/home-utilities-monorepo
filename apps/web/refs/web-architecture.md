@@ -33,9 +33,9 @@ Current content: `app/layout.tsx`, `app/page.tsx`, `app/globals.css`, and
 `features/home/home-heading.tsx`. Routes stay thin — `src/app/page.tsx` composes components from
 `features/`, it doesn't hold the UI.
 
-Financial UI (budget month and related panels) will live under `features/fin/` when those
-tickets land — naming/boundary: `../../../refs/monorepo-fin-applet.md`. Do not put that UI
-under a top-level `features/budget/` that bypasses the applet.
+Financial UI (budget month and related panels) lives under `features/fin/` — naming and
+boundary in `../../../refs/monorepo-fin-module.md`. Do not put that UI under a top-level
+`features/budget/` that bypasses the module.
 
 ## Server vs client
 

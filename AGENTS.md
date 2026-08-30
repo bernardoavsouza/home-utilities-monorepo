@@ -1,4 +1,4 @@
-# AGENTS.md — monorepo-boilerplate
+# AGENTS.md — home-utilities-monorepo
 
 **Start here.** This file is an **index**, not a manual: it routes you to the ref that answers
 your question, states the rules you must not break, and tells you how to keep the refs true.
@@ -24,7 +24,7 @@ How this repo actually behaves lives in the refs.
 | CD / production deploy (tag `v*`, Vercel + Render + Neon, secrets) | `refs/monorepo-deploy.md` |
 | the per-app Docker images — build context, stages, the separate migrate step, `NEXT_PUBLIC_*` at build time | `refs/monorepo-docker-images.md` |
 | `@packages/contracts` — shared types between web and api | `refs/monorepo-contracts.md` |
-| `fin` applet — naming (`fin_*` tables, `/v1/fin`, feature folders, contracts ownership) | `refs/monorepo-fin-applet.md` |
+| `fin` module — naming (`fin_*` tables, `/v1/fin`, feature folders, contracts ownership) | `refs/monorepo-fin-module.md` |
 
 ## Routing — per app
 
@@ -118,7 +118,7 @@ Every ref opens with, in order:
 ```markdown
 # <Scope> — <Subject>
 
-> **Status:** stable · **Reviewed:** AAAA-MM-DD · **Source:** monorepo-boilerplate@<branch>
+> **Status:** stable · **Reviewed:** AAAA-MM-DD · **Source:** home-utilities-monorepo@<branch>
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.

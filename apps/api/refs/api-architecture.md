@@ -50,8 +50,7 @@ lets an HTTP test boot `HealthModule` on its own, without `AppModule`.
 
 A new feature = `features/<name>/<name>.module.ts` + an import in `AppModule`.
 
-The financial applet is **`features/fin/`** (routes `/v1/fin/…`, tables `fin_*`). Naming and
-boundary rules: `../../../refs/monorepo-fin-applet.md`. Do not invent a parallel
+Financial domain work follows `../../../refs/monorepo-fin-module.md`. Do not invent a parallel
 `features/budget` top-level feature for the same domain.
 
 ## The `@/*` alias is declared three times

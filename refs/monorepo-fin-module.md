@@ -1,18 +1,16 @@
-# Monorepo — Fin applet (naming & boundary)
+# Monorepo — Fin module (naming & boundary)
 
-> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
+> **Status:** draft · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
 
 > **Altitude:** repo ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
 
 ## What it is
 
-`fin` is the **financial applet** inside Home Utilities: one bounded context for ledger,
-budget, categories, currencies, and (later) debts/projection. It is **not** a separate
-deployable — same BFF, same Postgres, same user — with an explicit namespace so other applets
+`fin` is the **financial module** inside Home Utilities: one bounded context for ledger,
+budget, categories, currencies, debts, and projection. It is **not** a separate
+deployable — same BFF, same Postgres, same user — with an explicit namespace so other modules
 cannot collide on `accounts` / `categories` / `transactions`.
-
-Product ticket: PP-46. This ref is the foundation (PP-47).
 
 ## Naming split
 
@@ -23,11 +21,11 @@ Product ticket: PP-46. This ref is the foundation (PP-47).
 | Prisma fields | camelCase + `@map` snake_case (existing persistence gate) | `createdAt` → `created_at` |
 | API feature folder | `apps/api/src/features/fin/` | Nest `FinModule` |
 | API routes | under global prefix `v1`, then `fin/…` | `/v1/fin/…` |
-| Web feature folder | `apps/web/src/features/fin/` | panel UI for the applet |
-| Contracts ownership | financial panel types belong to the fin applet | see *Contracts* below |
+| Web feature folder | `apps/web/src/features/fin/` | panel UI for the module |
+| Contracts ownership | financial panel types live under `packages/contracts/src/fin/` | see *Contracts* below |
 | UI copy | product language, **no** `fin` prefix required | “Orçamento”, “Categorias” |
 
-`fin` = applet/module. `budget` = **feature/panel inside** `fin` (e.g. table `fin_budgets`),
+`fin` = module. `budget` = **feature/panel inside** `fin` (e.g. table `fin_budgets`),
 not a second top-level namespace.
 
 ## What must not get a `fin_` prefix
@@ -36,12 +34,14 @@ not a second top-level namespace.
 |---|---|
 | Auth, user, session, health, readiness | Cross-cutting / other features |
 | Shared infra (`shared/infrastructure/…`) | Not domain |
+| Shared money primitives (`Money`, `CurrencyCode`) | Cross-module; stay at `packages/contracts/src/money.ts` |
 | UI strings and route page titles | Product copy |
-| Double prefixes (`fin_fin_…`, `fin_budget_budget_…`) | Noise; one applet prefix is enough |
+| Double prefixes (`fin_fin_…`, `fin_budget_budget_…`) | Noise; one module prefix is enough |
 
-## Code layout (when domain lands)
+## Code layout
 
-Do **not** create empty scaffold folders in this ticket. When PP-48+ implement domain:
+Canonical layout for the fin module (create folders only when they hold real code — no empty
+scaffolds):
 
 ```text
 apps/api/src/features/fin/
@@ -55,12 +55,14 @@ apps/web/src/features/fin/
   …                      # budget month UI and related panels
 ```
 
-`fin` is **one** Nest/web feature folder for the applet. Internal panels (budget, ledger,
+`fin` is **one** Nest/web feature folder for the module. Internal panels (budget, ledger,
 categories) are subfolders/concepts inside it — not separate `features/fin-budget` apps and
 not extra table prefixes.
 
 Wiring: import `FinModule` from `AppModule` (same pattern as `HealthModule` in
 `apps/api/refs/api-architecture.md`).
+
+There is **no** `features/fin/` tree and **no** fin Prisma model in `schema.prisma` today.
 
 ## Persistence
 
@@ -69,12 +71,13 @@ Builds on `apps/api/refs/api-persistence.md` (PascalCase models, snake_case DB, 
 | Rule | Detail |
 |---|---|
 | Every fin table/enum maps to `fin_…` | e.g. model `FinAccount` → `@@map("fin_accounts")` |
-| No bare financial tables | `accounts`, `categories`, `budgets` without `fin_` are rejected by convention |
-| Money always has currency | amount + currency from the fin catalog (domain tickets) |
+| No bare financial tables | `accounts`, `categories`, `budgets` without `fin_` are wrong |
+| Money always has currency | amount + currency; currency codes come from the shared `CurrencyCode` primitive |
 | Ledger is source of truth | budget panels do not store a parallel unreconciled balance |
 
-There is **no** fin Prisma model in `schema.prisma` today — domain models arrive with the
-product/spec tickets under PP-46.
+The `fin_` table prefix is a convention today. Extend the existing snake_case map gate
+(`apps/api/src/shared/infrastructure/prisma/prisma-snake-case-maps.ts`) to enforce the prefix
+when the first fin model lands.
 
 ## HTTP
 
@@ -88,18 +91,19 @@ paths as `fin/…` so the public surface is `/v1/fin/…`. Health stays `/v1/hea
 
 | Rule | Detail |
 |---|---|
-| Ownership | Budget, income, transaction/posting, debts, projection, money/currency panel types are **fin applet** contracts |
-| New fin types | Prefer `Fin*` type names and/or `packages/contracts/src/fin/` when adding or breaking-changing shapes |
-| Today | Existing files (`budget.ts`, `money.ts`, `income.ts`, …) **predate** this boundary and keep their current paths/names until an endpoint/contract ticket migrates them in the same PR as consumers |
+| Ownership | Budget, income, transaction/posting, debts, and projection panel types are **fin module** contracts |
+| Shared (not fin-owned) | `Money` and `CurrencyCode` stay in `packages/contracts/src/money.ts` — shared primitives any module may use |
+| New fin types | Put them under `packages/contracts/src/fin/`; type names need **no** `Fin` prefix (the folder is the namespace) |
+| Migration trigger | Existing files (`budget.ts`, `income.ts`, …) predate this boundary. Migrate each file into `src/fin/` in the **same PR** that creates the Nest endpoint for that panel |
 
 Do not rename contracts in a docs-only PR.
 
-## Hard rules (for later tickets)
+## Hard rules
 
 - No financial Prisma model or `/v1/fin` controller without following this naming.
 - No second top-level prefix for budget/ledger/categories (`budget_*` tables are wrong).
 - UI may say “Orçamento”; schema and API stay `fin`.
-- Specs/plans under PP-46 must cite this ref instead of inventing another prefix.
+- Specs and plans for the financial domain cite this ref instead of inventing another prefix.
 
 ## Related refs
 
