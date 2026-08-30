@@ -1,6 +1,6 @@
 # Monorepo — Shared contracts
 
-> **Status:** stable · **Reviewed:** 2026-08-22 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
+> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
 
 > **Altitude:** repo ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -15,6 +15,11 @@ no build step. Its only script is `typecheck`.
 Panel and action payloads for the MVP live here (per tela/painel), not as generic CRUD mirrors.
 Nest response DTOs `implements` these types when endpoints land; until then the package is the
 source of truth and web proves consumption via typed fixtures.
+
+Financial panel types (budget, income, transaction, debts, projection, money/currency) are
+owned by the **fin applet** — see `monorepo-fin-applet.md`. Existing file names
+(`budget.ts`, …) predate that boundary; migrate names/folders only together with API/web
+consumers.
 
 ## Current surface
 
