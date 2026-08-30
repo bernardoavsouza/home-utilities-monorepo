@@ -1,6 +1,6 @@
 # Monorepo — Fin module (naming & boundary)
 
-> **Status:** draft · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
+> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
 
 > **Altitude:** repo ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -45,24 +45,28 @@ scaffolds):
 
 ```text
 apps/api/src/features/fin/
-  fin.module.ts
+  fin.module.ts            # when first Nest wiring lands (not required for pure domain)
   application/
-  presentation/          # controllers under /v1/fin/…
-  domain/                # only when real domain rules exist
-  infrastructure/        # only if the feature owns an adapter
+  presentation/            # controllers under /v1/fin/…
+  domain/
+    currency/              # MVP catalog + Money helpers (PP-48)
+  infrastructure/          # only if the feature owns an adapter
 
 apps/web/src/features/fin/
-  …                      # budget month UI and related panels
+  …                        # budget month UI and related panels
 ```
 
 `fin` is **one** Nest/web feature folder for the module. Internal panels (budget, ledger,
 categories) are subfolders/concepts inside it — not separate `features/fin-budget` apps and
 not extra table prefixes.
 
-Wiring: import `FinModule` from `AppModule` (same pattern as `HealthModule` in
-`apps/api/refs/api-architecture.md`).
+Wiring: import `FinModule` from `AppModule` when the first controller/provider needs Nest DI
+(same pattern as `HealthModule` in `apps/api/refs/api-architecture.md`). Pure domain helpers
+may exist without a module until that wiring lands.
 
-There is **no** `features/fin/` tree and **no** fin Prisma model in `schema.prisma` today.
+Today: domain currency catalog/helpers exist under `features/fin/domain/currency/`. There is
+**no** Nest `FinModule` / `/v1/fin` controller and **no** fin Prisma model in `schema.prisma`
+yet (ledger/HTTP follow in later tickets).
 
 ## Persistence
 
@@ -72,7 +76,8 @@ Builds on `apps/api/refs/api-persistence.md` (PascalCase models, snake_case DB, 
 |---|---|
 | Every fin table/enum maps to `fin_…` | e.g. model `FinAccount` → `@@map("fin_accounts")` |
 | No bare financial tables | `accounts`, `categories`, `budgets` without `fin_` are wrong |
-| Money always has currency | amount + currency; currency codes come from the shared `CurrencyCode` primitive |
+| Money always has currency | `amountMinor` + `currency`; codes come from the shared closed `CurrencyCode` MVP union |
+| 1 account = 1 currency | Each `fin` account has exactly one currency; a posting must have `money.currency === account.currency`. Cross-currency movement is between accounts (ledger shape), never automatic FX |
 
 The `fin_` table prefix is a convention today. Extend the existing snake_case map gate
 (`apps/api/src/shared/infrastructure/prisma/prisma-snake-case-maps.ts`) to enforce the prefix

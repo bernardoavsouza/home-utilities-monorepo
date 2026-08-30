@@ -5,7 +5,12 @@ export type {
   ReadinessResponse,
   ReadinessStatus,
 } from './readiness.js';
-export type { CurrencyCode, Money } from './money.js';
+export type {
+  CurrencyCode,
+  CurrencyDefinition,
+  CurrencyKind,
+  Money,
+} from './money.js';
 export type {
   AuthSessionResponse,
   AuthSessionUser,

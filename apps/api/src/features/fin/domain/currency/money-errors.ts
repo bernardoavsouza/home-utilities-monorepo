@@ -1,0 +1,45 @@
+export type FinDomainErrorFields = Record<string, string[]>;
+
+export class FinDomainError extends Error {
+  readonly code: string;
+  readonly fields: FinDomainErrorFields;
+
+  constructor(code: string, message: string, fields: FinDomainErrorFields) {
+    super(message);
+    this.name = 'FinDomainError';
+    this.code = code;
+    this.fields = fields;
+  }
+}
+
+export function currencyUnknownError(): FinDomainError {
+  return new FinDomainError(
+    'FIN_CURRENCY_UNKNOWN',
+    'Currency is not in the MVP catalog',
+    { currency: ['Unknown currency code'] },
+  );
+}
+
+export function moneyAmountInvalidError(): FinDomainError {
+  return new FinDomainError(
+    'FIN_MONEY_AMOUNT_INVALID',
+    'Money amountMinor must be a safe integer',
+    { amountMinor: ['Must be a safe integer'] },
+  );
+}
+
+export function moneyMajorInvalidError(): FinDomainError {
+  return new FinDomainError(
+    'FIN_MONEY_MAJOR_INVALID',
+    'Money major amount string is invalid for currency scale',
+    { amount: ['Invalid major amount for currency scale'] },
+  );
+}
+
+export function moneyCurrencyMismatchError(): FinDomainError {
+  return new FinDomainError(
+    'FIN_MONEY_CURRENCY_MISMATCH',
+    'Money arithmetic requires the same currency',
+    { currency: ['Expected same currency on both operands'] },
+  );
+}

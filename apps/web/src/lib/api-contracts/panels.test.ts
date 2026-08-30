@@ -13,7 +13,7 @@ import {
 describe('api-contracts panel fixtures', () => {
   it('exposes money with currency', () => {
     expect(exampleMoney.currency).toBe('BRL');
-    expect(exampleMoney.amount).toBe('10.50');
+    expect(exampleMoney.amountMinor).toBe(1050);
   });
 
   it('exposes authenticated and unauthenticated sessions', () => {
@@ -34,8 +34,8 @@ describe('api-contracts panel fixtures', () => {
 
   it('exposes debts, projection, and dashboard panels', () => {
     expect(exampleDebtsPanel.totalsByCurrency).toHaveLength(1);
-    expect(exampleDebtsPanel.totalsByCurrency[0]?.principal).toBe('1000.00');
-    expect(exampleDebtsPanel.totalsByCurrency[0]?.balance).toBe('750.00');
+    expect(exampleDebtsPanel.totalsByCurrency[0]?.principal).toBe(100_000);
+    expect(exampleDebtsPanel.totalsByCurrency[0]?.balance).toBe(75_000);
     expect(exampleDebtsPanel.debts).toHaveLength(1);
     expect(exampleProjection.horizonMonths).toBe(3);
     expect(exampleProjection.points).toHaveLength(1);
@@ -44,8 +44,7 @@ describe('api-contracts panel fixtures', () => {
   });
 
   it('keeps budget overspent boolean distinct from overspentAmount money', () => {
-    expect(exampleBudgetHome.totals.overspentAmount.amount).toBe('0.00');
+    expect(exampleBudgetHome.totals.overspentAmount.amountMinor).toBe(0);
     expect(exampleBudgetHome.groups[0]?.categories[0]?.overspent).toBe(false);
   });
 });
-
