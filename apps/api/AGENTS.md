@@ -14,8 +14,9 @@ NestJS + Prisma + PostgreSQL, tested with Vitest and Supertest.
 | Prisma schema, snake_case mapping gate, migrations, seed, `PrismaService` | `refs/api-persistence.md` |
 | Vitest setup, test-database reset, `createTestApp`, which module to boot in an HTTP test | `refs/api-testing.md` |
 
-Repo-wide subjects — env vars, the two databases, CI, `@packages/contracts` — are indexed in
-[`../../AGENTS.md`](../../AGENTS.md).
+Repo-wide subjects — env vars, the two databases, CI, `@packages/contracts`, **fin module
+naming** — are indexed in [`../../AGENTS.md`](../../AGENTS.md). Financial domain work follows
+[`../../refs/monorepo-fin-module.md`](../../refs/monorepo-fin-module.md).
 
 ## Hard rules
 

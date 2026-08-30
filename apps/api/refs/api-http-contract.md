@@ -1,6 +1,6 @@
 # API — HTTP contract
 
-> **Status:** stable · **Reviewed:** 2026-08-21 · **Source:** home-utilities-monorepo@feat/PP-8-contratos-tipados-client-api
+> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -31,6 +31,9 @@ configure the same concern separately in `main.ts`.
 | `GET /v1/health/ready` | `200` / `503` `ReadinessResponse` | readiness — `SELECT 1` through `PrismaService` |
 | `GET /docs` | Swagger UI | **not** under `/v1` — Swagger is mounted outside the global prefix; `404` when disabled |
 | `GET /docs-json` | OpenAPI JSON | paths inside it *are* prefixed (`/v1/health`); `404` when disabled |
+
+Financial module routes register under `fin/…` (public surface `/v1/fin/…`). Naming and
+boundary: `../../../refs/monorepo-fin-module.md`. Health stays outside that namespace.
 
 Listen port: `process.env.PORT ?? 3001`.
 

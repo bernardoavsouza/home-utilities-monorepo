@@ -12,8 +12,9 @@ Next.js App Router (Next 16, React 19), Tailwind v4, tested with Vitest and Play
 | `src/` layout, Server vs Client Components, typed routes and `next typegen`, Tailwind/fonts, `@/*` alias, API base URL | `refs/web-architecture.md` |
 | Vitest (jsdom + Testing Library), `*.test.ts(x)` naming, Playwright e2e and the home smoke | `refs/web-testing.md` |
 
-Repo-wide subjects — env vars, CI, `@packages/contracts` — are indexed in
-[`../../AGENTS.md`](../../AGENTS.md).
+Repo-wide subjects — env vars, CI, `@packages/contracts`, **fin module naming** — are indexed
+in [`../../AGENTS.md`](../../AGENTS.md). Financial UI follows
+[`../../refs/monorepo-fin-module.md`](../../refs/monorepo-fin-module.md).
 
 ## Hard rules
 

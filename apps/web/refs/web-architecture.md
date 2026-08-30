@@ -1,6 +1,6 @@
 # Web — Architecture
 
-> **Status:** stable · **Reviewed:** 2026-08-20 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -32,6 +32,10 @@ when a second feature actually needs to share something. Don't create it empty.
 Current content: `app/layout.tsx`, `app/page.tsx`, `app/globals.css`, and
 `features/home/home-heading.tsx`. Routes stay thin — `src/app/page.tsx` composes components from
 `features/`, it doesn't hold the UI.
+
+Financial UI (budget month and related panels) lives under `features/fin/` — naming and
+boundary in `../../../refs/monorepo-fin-module.md`. Do not put that UI under a top-level
+`features/budget/` that bypasses the module.
 
 ## Server vs client
 

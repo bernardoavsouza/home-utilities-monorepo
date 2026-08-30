@@ -1,6 +1,6 @@
 # API — Persistence
 
-> **Status:** stable · **Reviewed:** 2026-08-20 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -29,6 +29,12 @@ snake_case, mapped explicitly.
 parses the schema text and returns one violation per missing map; its spec asserts the real
 schema is clean. So an unmapped `camelCase` identifier **fails `pnpm test`**, in CI too — this
 is a gate, not a style suggestion.
+
+### Financial module tables
+
+Fin tables and enums use the `fin_` prefix on the Postgres side (model `FinAccount` →
+`@@map("fin_accounts")`). There are no bare `accounts` / `budgets` / `categories` tables.
+Full boundary: `../../../refs/monorepo-fin-module.md`.
 
 ## Commands
 
