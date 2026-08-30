@@ -52,6 +52,11 @@ These hold even if you read nothing else:
 - Root-level tasks go through `turbo run` (`pnpm typecheck` / `test` / `lint` / `build`).
 - `pnpm db:reset` and `docker compose down -v` are **destructive** — local only, and never
   without saying so first.
+- **Comments follow Clean Code — every language, every app.** Prefer clear names and small
+  functions over comments. Add a comment only when the intent is non-obvious and the code
+  cannot say it alone. When a comment exists, explain **why** (constraint, trade-off,
+  invariant), never narrate **what** the next lines do. No banners, step-by-step AI noise,
+  TODOs that belong in a ticket, or comments that restate the identifier.
 
 ## Keeping refs current (living truth)
 
