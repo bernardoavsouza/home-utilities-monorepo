@@ -16,10 +16,12 @@ Panel and action payloads for the MVP live here (per tela/painel), not as generi
 Nest response DTOs `implements` these types when endpoints land; until then the package is the
 source of truth and web proves consumption via typed fixtures.
 
-Financial panel types (budget, income, transaction, debts, projection) are owned by the
-**fin module** — see `monorepo-fin-module.md`. `Money` / `CurrencyCode` stay shared in
-`money.ts`. Existing panel files (`budget.ts`, …) predate that boundary; migrate each into
-`packages/contracts/src/fin/` in the same PR that creates the Nest endpoint for that panel.
+Financial panel types (budget, income, transaction, debts, projection, dashboard) are owned
+by the **fin module** — see `monorepo-fin-module.md`. `Money` / `CurrencyCode` stay shared in
+`money.ts`. Existing panel files (`budget.ts`, `dashboard.ts`, …) predate that boundary;
+migrate each into `packages/contracts/src/fin/` and rename exported types to `Fin*` in the
+same PR that creates the Nest endpoint for that panel. The package entry point re-exports
+flat, so the `Fin` type prefix is the collision boundary (not the folder alone).
 
 ## Current surface
 

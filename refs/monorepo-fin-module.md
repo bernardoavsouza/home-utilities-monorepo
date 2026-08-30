@@ -22,7 +22,7 @@ cannot collide on `accounts` / `categories` / `transactions`.
 | API feature folder | `apps/api/src/features/fin/` | Nest `FinModule` |
 | API routes | under global prefix `v1`, then `fin/…` | `/v1/fin/…` |
 | Web feature folder | `apps/web/src/features/fin/` | panel UI for the module |
-| Contracts ownership | financial panel types live under `packages/contracts/src/fin/` | see *Contracts* below |
+| Contracts ownership | `packages/contracts/src/fin/` + `Fin*` type names | `FinBudgetHomeResponse` (barrel is flat — folder alone is not the namespace) |
 | UI copy | product language, **no** `fin` prefix required | “Orçamento”, “Categorias” |
 
 `fin` = module. `budget` = **feature/panel inside** `fin` (e.g. table `fin_budgets`),
@@ -73,7 +73,6 @@ Builds on `apps/api/refs/api-persistence.md` (PascalCase models, snake_case DB, 
 | Every fin table/enum maps to `fin_…` | e.g. model `FinAccount` → `@@map("fin_accounts")` |
 | No bare financial tables | `accounts`, `categories`, `budgets` without `fin_` are wrong |
 | Money always has currency | amount + currency; currency codes come from the shared `CurrencyCode` primitive |
-| Ledger is source of truth | budget panels do not store a parallel unreconciled balance |
 
 The `fin_` table prefix is a convention today. Extend the existing snake_case map gate
 (`apps/api/src/shared/infrastructure/prisma/prisma-snake-case-maps.ts`) to enforce the prefix
@@ -91,10 +90,10 @@ paths as `fin/…` so the public surface is `/v1/fin/…`. Health stays `/v1/hea
 
 | Rule | Detail |
 |---|---|
-| Ownership | Budget, income, transaction/posting, debts, and projection panel types are **fin module** contracts |
+| Ownership | Budget, income, transaction/posting, debts, projection, and dashboard panel types are **fin module** contracts |
 | Shared (not fin-owned) | `Money` and `CurrencyCode` stay in `packages/contracts/src/money.ts` — shared primitives any module may use |
-| New fin types | Put them under `packages/contracts/src/fin/`; type names need **no** `Fin` prefix (the folder is the namespace) |
-| Migration trigger | Existing files (`budget.ts`, `income.ts`, …) predate this boundary. Migrate each file into `src/fin/` in the **same PR** that creates the Nest endpoint for that panel |
+| New fin types | Put them under `packages/contracts/src/fin/` **and** prefix type names with `Fin` (`FinCategory`, `FinBudgetHomeResponse`). The package entry point re-exports flat (`import type { … } from '@packages/contracts'`), so the folder alone is not a consumer-facing namespace — the `Fin` prefix is the collision boundary |
+| Migration trigger | Existing files (`budget.ts`, `income.ts`, `dashboard.ts`, …) predate this boundary. Migrate each file into `src/fin/` **and** rename exported types to `Fin*` in the **same PR** that creates the Nest endpoint for that panel |
 
 Do not rename contracts in a docs-only PR.
 
