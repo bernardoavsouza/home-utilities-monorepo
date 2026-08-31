@@ -22,6 +22,7 @@ describe('createMoney', () => {
   });
 
   it('rejects non-safe-integer amountMinor with full error shape', () => {
+    expect.assertions(2);
     expect(() => createMoney(1.5, 'BRL')).toThrow(FinDomainError);
     try {
       createMoney(Number.NaN, 'BRL');
@@ -35,6 +36,7 @@ describe('createMoney', () => {
   });
 
   it('rejects unknown currency before amount validation', () => {
+    expect.assertions(1);
     try {
       createMoney(1.5, 'XXX' as 'BRL');
     } catch (error) {
@@ -63,6 +65,7 @@ describe('parseMajorToMoney / formatMoney', () => {
   });
 
   it('rejects more fractional digits than scale with full error shape', () => {
+    expect.assertions(2);
     expect(() => parseMajorToMoney('10.501', 'BRL')).toThrow(FinDomainError);
     try {
       parseMajorToMoney('10.501', 'BRL');
@@ -70,6 +73,18 @@ describe('parseMajorToMoney / formatMoney', () => {
       expect(error).toMatchObject({
         code: 'FIN_MONEY_MAJOR_INVALID',
         message: 'Money major amount string is invalid for currency scale',
+        fields: { amount: ['Invalid major amount for currency scale'] },
+      });
+    }
+  });
+
+  it('rejects major strings that overflow safe integer as FIN_MONEY_MAJOR_INVALID', () => {
+    expect.assertions(1);
+    try {
+      parseMajorToMoney('99999999999999999.99', 'BRL');
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: 'FIN_MONEY_MAJOR_INVALID',
         fields: { amount: ['Invalid major amount for currency scale'] },
       });
     }
@@ -118,6 +133,7 @@ describe('addMoney / subtractMoney', () => {
   });
 
   it('rejects currency mismatch with full error shape', () => {
+    expect.assertions(2);
     expect(() =>
       addMoney(createMoney(1, 'BRL'), createMoney(1, 'USD')),
     ).toThrow(FinDomainError);
@@ -133,9 +149,16 @@ describe('addMoney / subtractMoney', () => {
   });
 
   it('rejects safe-integer overflow and underflow', () => {
+    expect.assertions(3);
     expect(() =>
       addMoney(
         createMoney(Number.MAX_SAFE_INTEGER, 'BRL'),
+        createMoney(1, 'BRL'),
+      ),
+    ).toThrow(FinDomainError);
+    expect(() =>
+      subtractMoney(
+        createMoney(Number.MIN_SAFE_INTEGER, 'BRL'),
         createMoney(1, 'BRL'),
       ),
     ).toThrow(FinDomainError);
@@ -146,8 +169,9 @@ describe('addMoney / subtractMoney', () => {
       );
     } catch (error) {
       expect(error).toMatchObject({
-        code: 'FIN_MONEY_AMOUNT_INVALID',
-        fields: { amountMinor: ['Must be a safe integer'] },
+        code: 'FIN_MONEY_OVERFLOW',
+        message: 'Money arithmetic result exceeds safe integer range',
+        fields: { amountMinor: ['Result exceeds safe integer range'] },
       });
     }
   });

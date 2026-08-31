@@ -103,7 +103,9 @@ register paths as `fin/…` so the public surface is `/v1/fin/…`. Health stays
 `FinDomainError` (domain) does **not** yet map into the HTTP envelope. `AllExceptionsFilter`
 only forwards `code` / `fields` from `HttpException` payloads — an escaped domain error
 would surface as a generic 500 today. The domain→HTTP bridge (status + envelope) lands with
-the first `/v1/fin` endpoints in **PP-52**.
+the first `/v1/fin` endpoints in **PP-52**. In that same ticket, move `FinErrorCode` into
+`@packages/contracts` so the web can discriminate envelope `code` without duplicating
+literals (`ApiErrorBody.code` stays `string` until then).
 
 ## Contracts
 

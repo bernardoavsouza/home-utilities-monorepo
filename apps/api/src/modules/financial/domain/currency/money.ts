@@ -4,6 +4,7 @@ import {
   moneyAmountInvalidError,
   moneyCurrencyMismatchError,
   moneyMajorInvalidError,
+  moneyOverflowError,
 } from './money-errors';
 
 const MAJOR_PATTERN = /^-?\d+(\.\d+)?$/;
@@ -41,7 +42,7 @@ export function parseMajorToMoney(
   const parsed = Number(`${negative ? '-' : ''}${digits}`);
 
   if (!Number.isSafeInteger(parsed)) {
-    throw moneyAmountInvalidError();
+    throw moneyMajorInvalidError();
   }
 
   const amountMinor = parsed === 0 ? 0 : parsed;
@@ -58,10 +59,7 @@ export function formatMoney(money: Money): string {
   const absolute = Math.abs(money.amountMinor).toString();
   const padded = absolute.padStart(definition.scale + 1, '0');
   const cut = padded.length - definition.scale;
-  const fraction = padded.slice(cut);
-  const major = fraction
-    ? `${padded.slice(0, cut)}.${fraction}`
-    : padded;
+  const major = `${padded.slice(0, cut)}.${padded.slice(cut)}`;
   return negative ? `-${major}` : major;
 }
 
@@ -90,7 +88,7 @@ function assertSameCurrency(left: Money, right: Money): void {
 function checkedSum(left: number, right: number): number {
   const result = left + right;
   if (!Number.isSafeInteger(result)) {
-    throw moneyAmountInvalidError();
+    throw moneyOverflowError();
   }
   return result;
 }

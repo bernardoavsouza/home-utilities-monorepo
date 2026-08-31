@@ -19,6 +19,6 @@ export type CurrencyDefinition = {
 };
 
 export type Money = {
-  amountMinor: number;
-  currency: CurrencyCode;
+  readonly amountMinor: number;
+  readonly currency: CurrencyCode;
 };

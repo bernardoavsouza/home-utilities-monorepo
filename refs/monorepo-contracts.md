@@ -59,6 +59,11 @@ Boilerplate surface: health / readiness / HTTP errors. Financial shared primitiv
   `apps/api/src/modules/financial/domain/currency/` — contracts stay types-only.
 - **`Money.amountMinor` is a safe integer** in the currency's minor units (scale from the catalog:
   fiat 2, USDC/USDT 6, BTC/DEPIX 8). Never persist an amount without currency.
+  Scale also caps the representable major value (`MAX_SAFE_INTEGER / 10^scale`): ~9.0×10¹³
+  for scale 2, ~9.0×10⁹ for scale 6, ~9.0×10⁷ for scale 8. **DEPIX** (BRL-pegged, scale 8) is
+  the tightest ceiling in the catalog (~R$ 90M).
+- **`Money` fields are `readonly`.** Helpers return new objects; callers must not mutate
+  `amountMinor` / `currency` after construction.
 - **No fin panel contracts yet** (budget, income, txn, debts, projection, dashboard, auth session).
   Those return with their domain tickets as `Fin*` types under `src/fin/`.
 - **`ApiErrorBody.code` / `fields` are optional.** The exception filter includes them only when

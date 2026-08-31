@@ -61,6 +61,7 @@ describe('currency catalog', () => {
   });
 
   it('getCurrency rejects unknown currency with FIN_CURRENCY_UNKNOWN', () => {
+    expect.assertions(2);
     expect(() => getCurrency('XXX')).toThrow(FinDomainError);
     try {
       getCurrency('XXX');

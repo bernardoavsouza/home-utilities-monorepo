@@ -4,6 +4,7 @@ export type FinErrorCode =
   | 'FIN_CURRENCY_UNKNOWN'
   | 'FIN_MONEY_AMOUNT_INVALID'
   | 'FIN_MONEY_MAJOR_INVALID'
+  | 'FIN_MONEY_OVERFLOW'
   | 'FIN_MONEY_CURRENCY_MISMATCH';
 
 export class FinDomainError extends Error {
@@ -43,6 +44,14 @@ export function moneyMajorInvalidError(): FinDomainError {
     'FIN_MONEY_MAJOR_INVALID',
     'Money major amount string is invalid for currency scale',
     { amount: ['Invalid major amount for currency scale'] },
+  );
+}
+
+export function moneyOverflowError(): FinDomainError {
+  return new FinDomainError(
+    'FIN_MONEY_OVERFLOW',
+    'Money arithmetic result exceeds safe integer range',
+    { amountMinor: ['Result exceeds safe integer range'] },
   );
 }
 
