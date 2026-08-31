@@ -1,6 +1,6 @@
 # Monorepo — Shared contracts
 
-> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
+> **Status:** stable · **Reviewed:** 2026-08-31 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
 
 > **Altitude:** repo ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -12,16 +12,10 @@ contract between `apps/web` and `apps/api`. Private, `"type": "module"`, and con
 **as source** — `exports["."]` maps both `types` and `default` to `./src/index.ts`, so there is
 no build step. Its only script is `typecheck`.
 
-Panel and action payloads for the MVP live here (per tela/painel), not as generic CRUD mirrors.
-Nest response DTOs `implements` these types when endpoints land; until then the package is the
-source of truth and web proves consumption via typed fixtures.
-
-Financial panel types (budget, income, transaction, debts, projection, dashboard) are owned
-by the **fin module** — see `monorepo-fin-module.md`. `Money` / `CurrencyCode` stay shared in
-`money.ts`. Existing panel files (`budget.ts`, `dashboard.ts`, …) predate that boundary;
-migrate each into `packages/contracts/src/fin/` and rename exported types to `Fin*` in the
-same PR that creates the Nest endpoint for that panel. The package entry point re-exports
-flat, so the `Fin` type prefix is the collision boundary (not the folder alone).
+Boilerplate surface: health / readiness / HTTP errors. Financial shared primitives from PP-48:
+`Money` / `CurrencyCode` in `money.ts`. Fin **panel** payloads (budget, ledger UI, etc.) are
+**not** in this package until their tickets land — then they go under
+`packages/contracts/src/fin/` with `Fin*` type names (see `monorepo-fin-module.md`).
 
 ## Current surface
 
@@ -33,14 +27,7 @@ flat, so the `Fin` type prefix is the collision boundary (not the folder alone).
 | `ReadinessStatus` | `packages/contracts/src/readiness.ts` | `'ready' \| 'not_ready'` |
 | `DependencyStatus` | `packages/contracts/src/readiness.ts` | `'up' \| 'down'` |
 | `ReadinessResponse` | `packages/contracts/src/readiness.ts` | `{ status; dependencies: { database } }` |
-| `CurrencyCode`, `Money` | `packages/contracts/src/money.ts` | Branded `CurrencyCode` (uppercase ISO 4217); `Money = { amount: string; currency: CurrencyCode }` (decimal major units) |
-| Auth session / login / signup / logout | `packages/contracts/src/auth.ts` | Discriminated `AuthSessionResponse`; request/response action types |
-| Budget home / assign / move-money | `packages/contracts/src/budget.ts` | Panel view-model + assign/move-money; branded `BudgetMonth` (`YYYY-MM`); boolean `overspent` on lines; monetary `overspentAmount` on totals |
-| Income | `packages/contracts/src/income.ts` | Entry + create/update + list |
-| Txn / posting view | `packages/contracts/src/transaction.ts` | Transaction with `postingId` + create/update/delete/list |
-| Debts panel | `packages/contracts/src/debts.ts` | Panel list + `totalsByCurrency[]` (no single panel currency) + create + register payment |
-| Projection | `packages/contracts/src/projection.ts` | Horizon query + series; `horizonMonths` is `ProjectionHorizonMonths` (`3\|6\|12`) on query and response |
-| Dashboard | `packages/contracts/src/dashboard.ts` | Month summary + boolean `overspent` + `byGroup` breakdown |
+| `CurrencyCode`, `CurrencyKind`, `CurrencyScale`, `CurrencyDefinition`, `Money` | `packages/contracts/src/money.ts` | Closed MVP union `CurrencyCode` (`BRL`\|`USD`\|`EUR`\|`USDC`\|`USDT`\|`BTC`\|`DEPIX`); `CurrencyScale = 2 \| 6 \| 8`; `Money = { amountMinor: number; currency: CurrencyCode }` (safe integer minor units; scale from catalog) |
 
 `packages/contracts/src/index.ts` is the only entry point and re-exports everything.
 
@@ -51,10 +38,7 @@ flat, so the `Fin` type prefix is the collision boundary (not the folder alone).
 | `apps/api` — health service, controller, response DTO | `HealthResponse` |
 | `apps/api` — readiness service, controller, response DTO | `ReadinessResponse` |
 | `apps/api` — global exception filter (+ specs) | `ApiErrorBody` (`code` / `fields` forwarded when valid) |
-| `apps/web` — `src/lib/api-contracts` fixtures | Panel contracts via `import type` + `satisfies` (no `any`) |
-
-Panel Nest DTOs are **not** wired yet — they arrive with the endpoint tickets and must
-`implements` the matching contract type.
+| `apps/api` — `modules/financial/domain/currency` | `Money`, `CurrencyCode`, `CurrencyDefinition` |
 
 ## Rules
 
@@ -70,18 +54,18 @@ Panel Nest DTOs are **not** wired yet — they arrive with the endpoint tickets 
   `implements` the contract type so a drift fails typecheck (see
   `apps/api/refs/api-http-contract.md`).
 - **Money always carries currency.** No bare numeric money fields in contracts.
-- **`CurrencyCode` is branded.** Values are uppercase ISO 4217 (e.g. `BRL`, `USD`). Construct only
-  after validation at an API/boundary with an assertion (`value as CurrencyCode`); do not assert
-  empty or lowercase strings. The set is not closed in the type system (MVP).
-- **`BudgetMonth` is branded `YYYY-MM`.** Same construction rule (`value as BudgetMonth`); not a
-  template-literal brand. Runtime format checks belong to later API tickets.
-- **`overspent` vs `overspentAmount`.** Boolean flags stay named `overspent` (category line,
-  dashboard). The budget-home monetary total is `overspentAmount: Money`.
-- **Debts panel totals are per currency.** `DebtsPanelResponse.totalsByCurrency` is
-  `Array<{ currency; principal; balance }>` where `principal` / `balance` are decimal strings in
-  major units (same as `Money.amount`) under that row's single `currency` — not nested `Money`,
-  so currency cannot drift. There is no single panel `currency` / aggregated cross-currency total —
-  clients must not sum across currencies without an FX contract.
+- **`CurrencyCode` is a closed MVP union** (`BRL` \| `USD` \| `EUR` \| `USDC` \| `USDT` \| `BTC` \| `DEPIX`).
+  Runtime catalog metadata (`scale` / `symbol` / `kind`) and Money helpers live in
+  `apps/api/src/modules/financial/domain/currency/` — contracts stay types-only.
+- **`Money.amountMinor` is a safe integer** in the currency's minor units (scale from the catalog:
+  fiat 2, USDC/USDT 6, BTC/DEPIX 8). Never persist an amount without currency.
+  Scale also caps the representable major value (`MAX_SAFE_INTEGER / 10^scale`): ~9.0×10¹³
+  for scale 2, ~9.0×10⁹ for scale 6, ~9.0×10⁷ for scale 8. **DEPIX** (BRL-pegged, scale 8) is
+  the tightest ceiling in the catalog (~R$ 90M).
+- **`Money` fields are `readonly`.** Helpers return new objects; callers must not mutate
+  `amountMinor` / `currency` after construction.
+- **No fin panel contracts yet** (budget, income, txn, debts, projection, dashboard, auth session).
+  Those return with their domain tickets as `Fin*` types under `src/fin/`.
 - **`ApiErrorBody.code` / `fields` are optional.** The exception filter includes them only when
   `code` is a string and `fields` is a non-empty `Record<string, string[]>`; malformed or empty
   `{}` values are omitted.

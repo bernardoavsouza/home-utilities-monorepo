@@ -1,6 +1,6 @@
 # Web — Architecture
 
-> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
+> **Status:** stable · **Reviewed:** 2026-08-31 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -33,7 +33,7 @@ Current content: `app/layout.tsx`, `app/page.tsx`, `app/globals.css`, and
 `features/home/home-heading.tsx`. Routes stay thin — `src/app/page.tsx` composes components from
 `features/`, it doesn't hold the UI.
 
-Financial UI (budget month and related panels) lives under `features/fin/` — naming and
+Financial UI (budget month and related panels) lives under `features/financial/` — naming and
 boundary in `../../../refs/monorepo-fin-module.md`. Do not put that UI under a top-level
 `features/budget/` that bypasses the module.
 
