@@ -38,7 +38,7 @@ Boilerplate surface: health / readiness / HTTP errors. Financial shared primitiv
 | `apps/api` — health service, controller, response DTO | `HealthResponse` |
 | `apps/api` — readiness service, controller, response DTO | `ReadinessResponse` |
 | `apps/api` — global exception filter (+ specs) | `ApiErrorBody` (`code` / `fields` forwarded when valid) |
-| `apps/api` — `features/fin/domain/currency` | `Money`, `CurrencyCode`, `CurrencyDefinition` |
+| `apps/api` — `modules/financial/domain/currency` | `Money`, `CurrencyCode`, `CurrencyDefinition` |
 | `apps/web` — `src/lib/api-contracts` fixtures | `Money` via `import type` + `satisfies` (no `any`) |
 
 ## Rules
@@ -57,7 +57,7 @@ Boilerplate surface: health / readiness / HTTP errors. Financial shared primitiv
 - **Money always carries currency.** No bare numeric money fields in contracts.
 - **`CurrencyCode` is a closed MVP union** (`BRL` \| `USD` \| `EUR` \| `USDC` \| `USDT` \| `BTC`).
   Runtime catalog metadata (`scale` / `symbol` / `kind`) and Money helpers live in
-  `apps/api/src/features/fin/domain/currency/` — contracts stay types-only.
+  `apps/api/src/modules/financial/domain/currency/` — contracts stay types-only.
 - **`Money.amountMinor` is a safe integer** in the currency's minor units (scale from the catalog:
   fiat 2, USDC/USDT 6, BTC 8). Never persist an amount without currency.
 - **No fin panel contracts yet** (budget, income, txn, debts, projection, dashboard, auth session).

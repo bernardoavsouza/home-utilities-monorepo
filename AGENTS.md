@@ -24,7 +24,7 @@ How this repo actually behaves lives in the refs.
 | CD / production deploy (tag `v*`, Vercel + Render + Neon, secrets) | `refs/monorepo-deploy.md` |
 | the per-app Docker images — build context, stages, the separate migrate step, `NEXT_PUBLIC_*` at build time | `refs/monorepo-docker-images.md` |
 | `@packages/contracts` — shared types between web and api | `refs/monorepo-contracts.md` |
-| `fin` module — naming (`fin_*` tables, `/v1/fin`, feature folders, contracts ownership) | `refs/monorepo-fin-module.md` |
+| financial module — naming (`modules/financial`, `fin_*` tables, `/v1/fin`, contracts ownership) | `refs/monorepo-fin-module.md` |
 
 ## Routing — per app
 
