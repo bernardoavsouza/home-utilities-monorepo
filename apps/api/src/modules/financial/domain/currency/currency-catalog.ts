@@ -8,6 +8,7 @@ export const FIN_CURRENCY_CATALOG: Record<CurrencyCode, CurrencyDefinition> = {
   USDC: { code: 'USDC', scale: 6, symbol: 'USDC', kind: 'stablecoin' },
   USDT: { code: 'USDT', scale: 6, symbol: 'USDT', kind: 'stablecoin' },
   BTC: { code: 'BTC', scale: 8, symbol: '₿', kind: 'crypto' },
+  DEPIX: { code: 'DEPIX', scale: 8, symbol: 'DePIX', kind: 'stablecoin' },
 };
 
 export function isCurrencyCode(value: string): value is CurrencyCode {

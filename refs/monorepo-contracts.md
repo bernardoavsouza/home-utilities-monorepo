@@ -1,6 +1,6 @@
 # Monorepo — Shared contracts
 
-> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
+> **Status:** stable · **Reviewed:** 2026-08-31 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
 
 > **Altitude:** repo ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -27,7 +27,7 @@ Boilerplate surface: health / readiness / HTTP errors. Financial shared primitiv
 | `ReadinessStatus` | `packages/contracts/src/readiness.ts` | `'ready' \| 'not_ready'` |
 | `DependencyStatus` | `packages/contracts/src/readiness.ts` | `'up' \| 'down'` |
 | `ReadinessResponse` | `packages/contracts/src/readiness.ts` | `{ status; dependencies: { database } }` |
-| `CurrencyCode`, `CurrencyKind`, `CurrencyDefinition`, `Money` | `packages/contracts/src/money.ts` | Closed MVP union `CurrencyCode` (`BRL`\|`USD`\|`EUR`\|`USDC`\|`USDT`\|`BTC`); `Money = { amountMinor: number; currency: CurrencyCode }` (safe integer minor units; scale from catalog) |
+| `CurrencyCode`, `CurrencyKind`, `CurrencyDefinition`, `Money` | `packages/contracts/src/money.ts` | Closed MVP union `CurrencyCode` (`BRL`\|`USD`\|`EUR`\|`USDC`\|`USDT`\|`BTC`\|`DEPIX`); `Money = { amountMinor: number; currency: CurrencyCode }` (safe integer minor units; scale from catalog) |
 
 `packages/contracts/src/index.ts` is the only entry point and re-exports everything.
 
@@ -55,11 +55,11 @@ Boilerplate surface: health / readiness / HTTP errors. Financial shared primitiv
   `implements` the contract type so a drift fails typecheck (see
   `apps/api/refs/api-http-contract.md`).
 - **Money always carries currency.** No bare numeric money fields in contracts.
-- **`CurrencyCode` is a closed MVP union** (`BRL` \| `USD` \| `EUR` \| `USDC` \| `USDT` \| `BTC`).
+- **`CurrencyCode` is a closed MVP union** (`BRL` \| `USD` \| `EUR` \| `USDC` \| `USDT` \| `BTC` \| `DEPIX`).
   Runtime catalog metadata (`scale` / `symbol` / `kind`) and Money helpers live in
   `apps/api/src/modules/financial/domain/currency/` — contracts stay types-only.
 - **`Money.amountMinor` is a safe integer** in the currency's minor units (scale from the catalog:
-  fiat 2, USDC/USDT 6, BTC 8). Never persist an amount without currency.
+  fiat 2, USDC/USDT 6, BTC/DEPIX 8). Never persist an amount without currency.
 - **No fin panel contracts yet** (budget, income, txn, debts, projection, dashboard, auth session).
   Those return with their domain tickets as `Fin*` types under `src/fin/`.
 - **`ApiErrorBody.code` / `fields` are optional.** The exception filter includes them only when

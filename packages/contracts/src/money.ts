@@ -1,4 +1,11 @@
-export type CurrencyCode = 'BRL' | 'USD' | 'EUR' | 'USDC' | 'USDT' | 'BTC';
+export type CurrencyCode =
+  | 'BRL'
+  | 'USD'
+  | 'EUR'
+  | 'USDC'
+  | 'USDT'
+  | 'BTC'
+  | 'DEPIX';
 
 export type CurrencyKind = 'fiat' | 'stablecoin' | 'crypto';
 

@@ -7,9 +7,9 @@ import {
 import { FinDomainError } from './money-errors';
 
 describe('currency catalog', () => {
-  it('versions the six MVP currencies with locked scales/symbols/kinds', () => {
+  it('versions the MVP currencies with locked scales/symbols/kinds', () => {
     expect(Object.keys(FIN_CURRENCY_CATALOG).sort()).toEqual(
-      ['BTC', 'BRL', 'EUR', 'USD', 'USDC', 'USDT'].sort(),
+      ['BTC', 'BRL', 'DEPIX', 'EUR', 'USD', 'USDC', 'USDT'].sort(),
     );
     expect(FIN_CURRENCY_CATALOG.BRL).toMatchObject({
       scale: 2,
@@ -40,6 +40,11 @@ describe('currency catalog', () => {
       scale: 8,
       symbol: '₿',
       kind: 'crypto',
+    });
+    expect(FIN_CURRENCY_CATALOG.DEPIX).toMatchObject({
+      scale: 8,
+      symbol: 'DePIX',
+      kind: 'stablecoin',
     });
   });
 
