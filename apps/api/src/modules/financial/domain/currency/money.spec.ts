@@ -33,6 +33,21 @@ describe('createMoney', () => {
       });
     }
   });
+
+  it('rejects unknown currency before amount validation', () => {
+    try {
+      createMoney(1.5, 'XXX' as 'BRL');
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: 'FIN_CURRENCY_UNKNOWN',
+        fields: { currency: ['Unknown currency code'] },
+      });
+    }
+  });
+
+  it('normalizes negative zero', () => {
+    expect(Object.is(createMoney(-0, 'BRL').amountMinor, 0)).toBe(true);
+  });
 });
 
 describe('parseMajorToMoney / formatMoney', () => {
@@ -76,6 +91,14 @@ describe('parseMajorToMoney / formatMoney', () => {
 
   it('accepts negative majors', () => {
     expect(parseMajorToMoney('-10.50', 'BRL').amountMinor).toBe(-1050);
+  });
+
+  it('normalizes negative zero major strings', () => {
+    expect(parseMajorToMoney('-0.00', 'BRL')).toEqual({
+      amountMinor: 0,
+      currency: 'BRL',
+    });
+    expect(Object.is(parseMajorToMoney('-0', 'BRL').amountMinor, 0)).toBe(true);
   });
 
   it('round-trips USDC and BTC scales', () => {

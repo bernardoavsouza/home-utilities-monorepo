@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FIN_CURRENCY_CATALOG,
+  assertCurrency,
   getCurrency,
   isCurrencyCode,
 } from './currency-catalog';
@@ -70,5 +71,10 @@ describe('currency catalog', () => {
         fields: { currency: ['Unknown currency code'] },
       });
     }
+  });
+
+  it('assertCurrency rejects unknown codes and accepts known ones', () => {
+    expect(() => assertCurrency('BRL')).not.toThrow();
+    expect(() => assertCurrency('XXX')).toThrow(FinDomainError);
   });
 });

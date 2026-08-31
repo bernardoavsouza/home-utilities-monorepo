@@ -1,10 +1,20 @@
 export type FinDomainErrorFields = Record<string, string[]>;
 
+export type FinErrorCode =
+  | 'FIN_CURRENCY_UNKNOWN'
+  | 'FIN_MONEY_AMOUNT_INVALID'
+  | 'FIN_MONEY_MAJOR_INVALID'
+  | 'FIN_MONEY_CURRENCY_MISMATCH';
+
 export class FinDomainError extends Error {
-  readonly code: string;
+  readonly code: FinErrorCode;
   readonly fields: FinDomainErrorFields;
 
-  constructor(code: string, message: string, fields: FinDomainErrorFields) {
+  constructor(
+    code: FinErrorCode,
+    message: string,
+    fields: FinDomainErrorFields,
+  ) {
     super(message);
     this.name = 'FinDomainError';
     this.code = code;

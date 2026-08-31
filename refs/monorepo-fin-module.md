@@ -100,6 +100,11 @@ Global prefix remains `v1` (`apps/api/refs/api-http-contract.md`). Financial con
 register paths as `fin/…` so the public surface is `/v1/fin/…`. Health stays `/v1/health`
 (not under `fin`).
 
+`FinDomainError` (domain) does **not** yet map into the HTTP envelope. `AllExceptionsFilter`
+only forwards `code` / `fields` from `HttpException` payloads — an escaped domain error
+would surface as a generic 500 today. The domain→HTTP bridge (status + envelope) lands with
+the first `/v1/fin` endpoints in **PP-52**.
+
 ## Contracts
 
 `@packages/contracts` stays types-only (`refs/monorepo-contracts.md`).

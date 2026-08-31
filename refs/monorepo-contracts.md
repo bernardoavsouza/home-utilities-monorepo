@@ -27,7 +27,7 @@ Boilerplate surface: health / readiness / HTTP errors. Financial shared primitiv
 | `ReadinessStatus` | `packages/contracts/src/readiness.ts` | `'ready' \| 'not_ready'` |
 | `DependencyStatus` | `packages/contracts/src/readiness.ts` | `'up' \| 'down'` |
 | `ReadinessResponse` | `packages/contracts/src/readiness.ts` | `{ status; dependencies: { database } }` |
-| `CurrencyCode`, `CurrencyKind`, `CurrencyDefinition`, `Money` | `packages/contracts/src/money.ts` | Closed MVP union `CurrencyCode` (`BRL`\|`USD`\|`EUR`\|`USDC`\|`USDT`\|`BTC`\|`DEPIX`); `Money = { amountMinor: number; currency: CurrencyCode }` (safe integer minor units; scale from catalog) |
+| `CurrencyCode`, `CurrencyKind`, `CurrencyScale`, `CurrencyDefinition`, `Money` | `packages/contracts/src/money.ts` | Closed MVP union `CurrencyCode` (`BRL`\|`USD`\|`EUR`\|`USDC`\|`USDT`\|`BTC`\|`DEPIX`); `CurrencyScale = 2 \| 6 \| 8`; `Money = { amountMinor: number; currency: CurrencyCode }` (safe integer minor units; scale from catalog) |
 
 `packages/contracts/src/index.ts` is the only entry point and re-exports everything.
 

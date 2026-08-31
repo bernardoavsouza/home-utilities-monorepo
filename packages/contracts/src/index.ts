@@ -9,5 +9,6 @@ export type {
   CurrencyCode,
   CurrencyDefinition,
   CurrencyKind,
+  CurrencyScale,
   Money,
 } from './money.js';

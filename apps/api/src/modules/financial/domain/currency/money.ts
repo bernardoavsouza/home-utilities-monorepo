@@ -1,5 +1,5 @@
 import type { CurrencyCode, Money } from '@packages/contracts';
-import { getCurrency } from './currency-catalog';
+import { assertCurrency, getCurrency } from './currency-catalog';
 import {
   moneyAmountInvalidError,
   moneyCurrencyMismatchError,
@@ -12,11 +12,11 @@ export function createMoney(
   amountMinor: number,
   currency: CurrencyCode,
 ): Money {
+  assertCurrency(currency);
   if (!Number.isSafeInteger(amountMinor)) {
     throw moneyAmountInvalidError();
   }
-  getCurrency(currency);
-  return { amountMinor, currency };
+  return { amountMinor: amountMinor === 0 ? 0 : amountMinor, currency };
 }
 
 export function parseMajorToMoney(
@@ -38,12 +38,13 @@ export function parseMajorToMoney(
 
   const paddedFraction = fractionPart.padEnd(definition.scale, '0');
   const digits = `${wholePart}${paddedFraction}`;
-  const amountMinor = Number(`${negative ? '-' : ''}${digits}`);
+  const parsed = Number(`${negative ? '-' : ''}${digits}`);
 
-  if (!Number.isSafeInteger(amountMinor)) {
+  if (!Number.isSafeInteger(parsed)) {
     throw moneyAmountInvalidError();
   }
 
+  const amountMinor = parsed === 0 ? 0 : parsed;
   return { amountMinor, currency };
 }
 
@@ -56,15 +57,11 @@ export function formatMoney(money: Money): string {
   const negative = money.amountMinor < 0;
   const absolute = Math.abs(money.amountMinor).toString();
   const padded = absolute.padStart(definition.scale + 1, '0');
-  const whole =
-    definition.scale === 0
-      ? padded
-      : padded.slice(0, padded.length - definition.scale);
-  const fraction =
-    definition.scale === 0
-      ? ''
-      : padded.slice(padded.length - definition.scale);
-  const major = definition.scale === 0 ? whole : `${whole}.${fraction}`;
+  const cut = padded.length - definition.scale;
+  const fraction = padded.slice(cut);
+  const major = fraction
+    ? `${padded.slice(0, cut)}.${fraction}`
+    : padded;
   return negative ? `-${major}` : major;
 }
 
