@@ -44,8 +44,9 @@ These hold even if you read nothing else:
 
 - **pnpm only.** `npm` / `yarn` installs are blocked by `only-allow`. Node 24, pnpm 11.
 - **No root `.env`, no secrets in git.** Env is per app; templates carry local values only.
-- **No domain feature and no Prisma model without a product/spec decision.** Scaffold work stays
-  at health + home.
+- **No product module / domain feature and no Prisma model without a product/spec decision.**
+  Today that means health + home, plus `modules/financial` currency domain (PP-48). No fin
+  Prisma models or `/v1/fin` HTTP yet.
 - **No new `packages/*`** without a product/spec reason.
 - **No cross-app `@/` imports.** `@/*` is app-local; cross-app types come from
   `@packages/contracts` via `import type`.

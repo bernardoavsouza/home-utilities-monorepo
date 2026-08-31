@@ -1,6 +1,6 @@
 # API — Testing
 
-> **Status:** stable · **Reviewed:** 2026-08-20 · **Source:** monorepo-boilerplate@feat/bff-initial-setup
+> **Status:** stable · **Reviewed:** 2026-08-31 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -54,6 +54,7 @@ spec that boots the whole root module stops testing one seam and starts assertin
 |---|---|---|
 | `features/health/presentation/health.controller.spec.ts` | `HealthService` directly, then `HealthModule` | service unit + `GET /v1/health` |
 | `features/health/presentation/readiness.controller.spec.ts` | `ReadinessService` with a stub, `HealthModule`, and a local module whose `PrismaService` always fails | `ready`/`not_ready` branches, `200` against real Postgres, `503` with the readiness body shape |
+| `modules/financial/domain/currency/*.spec.ts` | nothing — pure unit | MVP currency catalog + Money helpers (`create` / parse / format / add / sub, domain errors) |
 | `shared/infrastructure/http/observability.http.spec.ts` | `HealthModule` | `x-request-id` generated / echoed / rejected when not id-shaped, `ApiErrorBody` on a 404 |
 | `shared/infrastructure/http/request-id.spec.ts` | nothing — pure unit | the `sanitizeRequestId` accept/reject matrix |
 | `shared/infrastructure/http/swagger.http.spec.ts` | `HealthModule` | the `isSwaggerEnabled` matrix, `/docs` + `/docs-json` served when on and `404` when off |

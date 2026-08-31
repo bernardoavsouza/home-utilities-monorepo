@@ -1,6 +1,6 @@
 # Web — Architecture
 
-> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
+> **Status:** stable · **Reviewed:** 2026-08-31 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
