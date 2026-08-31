@@ -39,7 +39,6 @@ Boilerplate surface: health / readiness / HTTP errors. Financial shared primitiv
 | `apps/api` — readiness service, controller, response DTO | `ReadinessResponse` |
 | `apps/api` — global exception filter (+ specs) | `ApiErrorBody` (`code` / `fields` forwarded when valid) |
 | `apps/api` — `modules/financial/domain/currency` | `Money`, `CurrencyCode`, `CurrencyDefinition` |
-| `apps/web` — `src/lib/api-contracts` fixtures | `Money` via `import type` + `satisfies` (no `any`) |
 
 ## Rules
 
