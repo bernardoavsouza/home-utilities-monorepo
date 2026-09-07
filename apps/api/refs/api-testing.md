@@ -1,6 +1,6 @@
 # API — Testing
 
-> **Status:** stable · **Reviewed:** 2026-08-31 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
+> **Status:** stable · **Reviewed:** 2026-09-07 · **Source:** home-utilities-monorepo@feat/PP-49-ledger-accounts-balanced-entries
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -55,6 +55,8 @@ spec that boots the whole root module stops testing one seam and starts assertin
 | `features/health/presentation/health.controller.spec.ts` | `HealthService` directly, then `HealthModule` | service unit + `GET /v1/health` |
 | `features/health/presentation/readiness.controller.spec.ts` | `ReadinessService` with a stub, `HealthModule`, and a local module whose `PrismaService` always fails | `ready`/`not_ready` branches, `200` against real Postgres, `503` with the readiness body shape |
 | `modules/financial/domain/currency/*.spec.ts` | nothing — pure unit | MVP currency catalog + Money helpers (`create` / parse / format / add / sub, domain errors) |
+| `modules/financial/domain/ledger/*.spec.ts` | nothing — pure unit | per-currency balance invariants + signed balance by account type |
+| `modules/financial/application/ledger.service.spec.ts` | `FinancialModule` + real Prisma | ledger posting scenarios against `app_test` (needs migrate) |
 | `shared/infrastructure/http/observability.http.spec.ts` | `HealthModule` | `x-request-id` generated / echoed / rejected when not id-shaped, `ApiErrorBody` on a 404 |
 | `shared/infrastructure/http/request-id.spec.ts` | nothing — pure unit | the `sanitizeRequestId` accept/reject matrix |
 | `shared/infrastructure/http/swagger.http.spec.ts` | `HealthModule` | the `isSwaggerEnabled` matrix, `/docs` + `/docs-json` served when on and `404` when off |
@@ -79,8 +81,8 @@ is read at boot, so each case needs its own app instance. `swagger.http.spec.ts`
 `shared/infrastructure/prisma/prisma.service.spec.ts` boots `PrismaModule`, calls `$connect()`
 explicitly (the service no longer connects on init) and runs `SELECT 1`. It requires Docker Compose
 Postgres to be up plus `apps/api/.env.test` — as does the readiness `200` case in
-`features/health/presentation/readiness.controller.spec.ts`. Those two are the only specs that
-truly need a database.
+`features/health/presentation/readiness.controller.spec.ts` and the ledger integration
+`modules/financial/application/ledger.service.spec.ts`.
 
 ## Snake_case gate
 

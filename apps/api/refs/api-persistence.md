@@ -1,6 +1,6 @@
 # API — Persistence
 
-> **Status:** stable · **Reviewed:** 2026-08-30 · **Source:** home-utilities-monorepo@feat/PP-47-fin-naming-convention
+> **Status:** stable · **Reviewed:** 2026-09-07 · **Source:** home-utilities-monorepo@feat/PP-49-ledger-accounts-balanced-entries
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -8,8 +8,9 @@
 ## Schema
 
 `prisma/schema.prisma` — `prisma-client-js` generator, `postgresql` datasource reading
-`env("DATABASE_URL")`. **It holds no domain model today**, and stays that way until a product
-or spec decision adds one. Prisma is pinned to 6.x (not 7 — the schema URL API differs).
+`env("DATABASE_URL")`. Domain models today: financial ledger (`FinAccount`,
+`FinJournalEntry`, `FinJournalLine` + enums). Prisma is pinned to 6.x (not 7 — the schema URL
+API differs).
 
 ## snake_case in the database is enforced by a test
 
@@ -34,7 +35,9 @@ is a gate, not a style suggestion.
 
 Fin tables and enums use the `fin_` prefix on the Postgres side (model `FinAccount` →
 `@@map("fin_accounts")`). There are no bare `accounts` / `budgets` / `categories` tables.
-Full boundary: `../../../refs/monorepo-fin-module.md`.
+The snake_case gate allows plural `fin_*` maps for `Fin*` models (singular `toSnakeCase` or
+English plural). Full boundary: `../../../refs/monorepo-fin-module.md`. Ledger rules:
+`api-financial-ledger.md`.
 
 ## Commands
 
