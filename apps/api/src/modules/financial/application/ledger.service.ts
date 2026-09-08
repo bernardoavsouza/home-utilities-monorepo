@@ -86,7 +86,6 @@ export class LedgerService {
       name: input.name,
       type: input.type,
       currency: input.currency,
-      isSystem: false,
       systemKind: null,
     });
   }

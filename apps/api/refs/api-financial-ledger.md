@@ -31,7 +31,10 @@ lines. No `category_id` (PP-50). No materialised `balance` column.
 | `asset`, `expense` | Σ debit − Σ credit |
 | `liability`, `income`, `equity` | Σ credit − Σ debit |
 
-User-facing “minhas contas”: `asset` / `liability` with `is_system = false`.
+User-facing “minhas contas”: `asset` / `liability` with `system_kind IS NULL`. There is no
+separate `is_system` column — `system_kind` alone discriminates, so an account that is flagged
+system without a kind (invisible to every read path) is not representable. `isSystem` survives on
+`LedgerAccountRecord`, derived from `systemKind !== null`.
 
 System accounts (lazy per user × currency): `income`, `expense`, `exchange` (equity),
 `opening_balance` (equity). Unique `(user_id, system_kind, currency)`.

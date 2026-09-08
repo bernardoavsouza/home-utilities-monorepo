@@ -9,10 +9,7 @@ import type {
   FinSystemAccountKind,
 } from '@prisma/client';
 import { PrismaService } from '@/shared/infrastructure/prisma/prisma.service';
-import {
-  accountTypeInvalidError,
-  lineAmountInvalidError,
-} from '@/modules/financial/domain/ledger/ledger-errors';
+import { lineAmountInvalidError } from '@/modules/financial/domain/ledger/ledger-errors';
 import type {
   FinAccountTypeName,
   FinEntryKindName,
@@ -141,7 +138,7 @@ function mapAccount(account: FinAccount): LedgerAccountRecord {
     name: account.name,
     type: ACCOUNT_TYPE_FROM_PRISMA[account.type],
     currency: account.currency,
-    isSystem: account.isSystem,
+    isSystem: account.systemKind !== null,
     systemKind: account.systemKind
       ? SYSTEM_KIND_FROM_PRISMA[account.systemKind]
       : null,
@@ -157,24 +154,15 @@ export class LedgerRepository {
     name: string;
     type: FinAccountTypeName;
     currency: string;
-    isSystem?: boolean;
     systemKind?: FinSystemAccountKindName | null;
   }): Promise<LedgerAccountRecord> {
-    const isSystem = input.isSystem ?? false;
     const systemKind = input.systemKind ?? null;
-    if (isSystem !== (systemKind != null)) {
-      throw accountTypeInvalidError(
-        'System accounts require a systemKind, and user accounts must not have one',
-      );
-    }
-
     const account = await this.prisma.finAccount.create({
       data: {
         userId: input.userId,
         name: input.name,
         type: ACCOUNT_TYPE_TO_PRISMA[input.type],
         currency: input.currency,
-        isSystem,
         systemKind:
           systemKind != null ? SYSTEM_KIND_TO_PRISMA[systemKind] : null,
       },
@@ -196,7 +184,7 @@ export class LedgerRepository {
     const accounts = await this.prisma.finAccount.findMany({
       where: {
         userId,
-        isSystem: false,
+        systemKind: null,
         type: { in: ['Asset', 'Liability'] },
       },
       orderBy: { createdAt: 'asc' },
@@ -214,7 +202,6 @@ export class LedgerRepository {
         userId,
         systemKind: SYSTEM_KIND_TO_PRISMA[systemKind],
         currency,
-        isSystem: true,
       },
     });
     return account ? mapAccount(account) : null;
@@ -230,7 +217,6 @@ export class LedgerRepository {
     try {
       return await this.createAccount({
         ...input,
-        isSystem: true,
         systemKind: input.systemKind,
       });
     } catch (error) {

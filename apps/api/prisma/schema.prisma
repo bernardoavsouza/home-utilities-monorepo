@@ -52,7 +52,6 @@ model FinAccount {
   name       String
   type       FinAccountType
   currency   String
-  isSystem   Boolean                @default(false) @map("is_system")
   systemKind FinSystemAccountKind?  @map("system_kind")
   createdAt  DateTime               @default(now()) @map("created_at")
   updatedAt  DateTime               @updatedAt @map("updated_at")

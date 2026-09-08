@@ -482,7 +482,7 @@ describe('LedgerService', () => {
       first.map((a) => a.id).sort(),
     );
     const count = await prisma.finAccount.count({
-      where: { userId: uid, isSystem: true, currency: 'USD' },
+      where: { userId: uid, systemKind: { not: null }, currency: 'USD' },
     });
     expect(count).toBe(4);
   });

@@ -17,7 +17,6 @@ CREATE TABLE "fin_accounts" (
     "name" TEXT NOT NULL,
     "type" "fin_account_type" NOT NULL,
     "currency" TEXT NOT NULL,
-    "is_system" BOOLEAN NOT NULL DEFAULT false,
     "system_kind" "fin_system_account_kind",
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
