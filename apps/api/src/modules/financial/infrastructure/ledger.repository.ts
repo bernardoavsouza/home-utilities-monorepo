@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type {
   FinAccount,
+  FinEntryKind,
   FinJournalEntry,
   FinJournalLine,
   FinAccountType,
@@ -8,10 +9,13 @@ import type {
   FinSystemAccountKind,
 } from '@prisma/client';
 import { PrismaService } from '@/shared/infrastructure/prisma/prisma.service';
-import { lineAmountInvalidError } from '@/modules/financial/domain/ledger/ledger-errors';
+import {
+  accountTypeInvalidError,
+  lineAmountInvalidError,
+} from '@/modules/financial/domain/ledger/ledger-errors';
 import type {
   FinAccountTypeName,
-  FinEntryKind,
+  FinEntryKindName,
   FinJournalSideName,
   FinSystemAccountKindName,
   PostLineDraft,
@@ -41,6 +45,28 @@ const SIDE_TO_PRISMA: Record<FinJournalSideName, FinJournalSide> = {
 const SIDE_FROM_PRISMA: Record<FinJournalSide, FinJournalSideName> = {
   Debit: 'debit',
   Credit: 'credit',
+};
+
+const ENTRY_KIND_TO_PRISMA: Record<FinEntryKindName, FinEntryKind> = {
+  expense: 'Expense',
+  income: 'Income',
+  transfer: 'Transfer',
+  pay_liability: 'PayLiability',
+  exchange: 'Exchange',
+  split: 'Split',
+  opening_balance: 'OpeningBalance',
+  reversal: 'Reversal',
+};
+
+const ENTRY_KIND_FROM_PRISMA: Record<FinEntryKind, FinEntryKindName> = {
+  Expense: 'expense',
+  Income: 'income',
+  Transfer: 'transfer',
+  PayLiability: 'pay_liability',
+  Exchange: 'exchange',
+  Split: 'split',
+  OpeningBalance: 'opening_balance',
+  Reversal: 'reversal',
 };
 
 const SYSTEM_KIND_TO_PRISMA: Record<
@@ -73,12 +99,22 @@ export type LedgerAccountRecord = {
   systemKind: FinSystemAccountKindName | null;
 };
 
+export type LedgerLineRecord = {
+  id: string;
+  entryId: string;
+  side: FinJournalSideName;
+  amountMinor: number;
+  postedAt: Date;
+  kind: FinEntryKindName;
+  description: string | null;
+};
+
 export type LedgerEntryRecord = {
   id: string;
   userId: string;
   postedAt: Date;
   description: string | null;
-  kind: string;
+  kind: FinEntryKindName;
   reversesEntryId: string | null;
   lines: Array<{
     id: string;
@@ -124,17 +160,23 @@ export class LedgerRepository {
     isSystem?: boolean;
     systemKind?: FinSystemAccountKindName | null;
   }): Promise<LedgerAccountRecord> {
+    const isSystem = input.isSystem ?? false;
+    const systemKind = input.systemKind ?? null;
+    if (isSystem !== (systemKind != null)) {
+      throw accountTypeInvalidError(
+        'System accounts require a systemKind, and user accounts must not have one',
+      );
+    }
+
     const account = await this.prisma.finAccount.create({
       data: {
         userId: input.userId,
         name: input.name,
         type: ACCOUNT_TYPE_TO_PRISMA[input.type],
         currency: input.currency,
-        isSystem: input.isSystem ?? false,
+        isSystem,
         systemKind:
-          input.systemKind != null
-            ? SYSTEM_KIND_TO_PRISMA[input.systemKind]
-            : null,
+          systemKind != null ? SYSTEM_KIND_TO_PRISMA[systemKind] : null,
       },
     });
     return mapAccount(account);
@@ -212,7 +254,7 @@ export class LedgerRepository {
 
   async insertEntryWithLines(input: {
     userId: string;
-    kind: FinEntryKind;
+    kind: FinEntryKindName;
     description?: string | null;
     postedAt: Date;
     reversesEntryId?: string | null;
@@ -222,7 +264,7 @@ export class LedgerRepository {
       const entry = await tx.finJournalEntry.create({
         data: {
           userId: input.userId,
-          kind: input.kind,
+          kind: ENTRY_KIND_TO_PRISMA[input.kind],
           description: input.description ?? null,
           postedAt: input.postedAt,
           reversesEntryId: input.reversesEntryId ?? null,
@@ -253,6 +295,17 @@ export class LedgerRepository {
     return entry ? this.mapEntry(entry) : null;
   }
 
+  async findReversalOfEntry(
+    userId: string,
+    entryId: string,
+  ): Promise<LedgerEntryRecord | null> {
+    const entry = await this.prisma.finJournalEntry.findFirst({
+      where: { userId, reversesEntryId: entryId },
+      include: { lines: true },
+    });
+    return entry ? this.mapEntry(entry) : null;
+  }
+
   async sumLinesForAccount(
     accountId: string,
   ): Promise<{ debit: number; credit: number }> {
@@ -275,19 +328,23 @@ export class LedgerRepository {
     return { debit, credit };
   }
 
-  async listLinesForAccount(accountId: string): Promise<
-    Array<{
-      id: string;
-      entryId: string;
-      side: FinJournalSideName;
-      amountMinor: number;
-      postedAt: Date;
-      kind: string;
-      description: string | null;
-    }>
-  > {
+  async listLinesForAccount(
+    accountId: string,
+    range?: { from?: Date; to?: Date },
+  ): Promise<LedgerLineRecord[]> {
+    const postedAt =
+      range?.from != null || range?.to != null
+        ? {
+            ...(range.from != null ? { gte: range.from } : {}),
+            ...(range.to != null ? { lte: range.to } : {}),
+          }
+        : undefined;
+
     const lines = await this.prisma.finJournalLine.findMany({
-      where: { accountId },
+      where: {
+        accountId,
+        ...(postedAt ? { entry: { postedAt } } : {}),
+      },
       include: { entry: true },
       orderBy: [{ entry: { postedAt: 'asc' } }, { id: 'asc' }],
     });
@@ -298,7 +355,7 @@ export class LedgerRepository {
       side: SIDE_FROM_PRISMA[line.side],
       amountMinor: toNumberAmount(line.amountMinor),
       postedAt: line.entry.postedAt,
-      kind: line.entry.kind,
+      kind: ENTRY_KIND_FROM_PRISMA[line.entry.kind],
       description: line.entry.description,
     }));
   }
@@ -311,7 +368,7 @@ export class LedgerRepository {
       userId: entry.userId,
       postedAt: entry.postedAt,
       description: entry.description,
-      kind: entry.kind,
+      kind: ENTRY_KIND_FROM_PRISMA[entry.kind],
       reversesEntryId: entry.reversesEntryId,
       lines: entry.lines.map((line) => ({
         id: line.id,

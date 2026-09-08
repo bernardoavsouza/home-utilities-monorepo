@@ -487,6 +487,158 @@ describe('LedgerService', () => {
     expect(count).toBe(4);
   });
 
+  it('validates a fee even when it posts no lines', async () => {
+    const uid = userId();
+    const brl = await service.createUserAccount({
+      userId: uid,
+      name: 'BRL',
+      type: 'asset',
+      currency: 'BRL',
+    });
+    const usd = await service.createUserAccount({
+      userId: uid,
+      name: 'USD',
+      type: 'asset',
+      currency: 'USD',
+    });
+    const exchange = {
+      userId: uid,
+      fromAccountId: brl.id,
+      toAccountId: usd.id,
+      fromMoney: { amountMinor: 10_000, currency: 'BRL' } as const,
+      toMoney: { amountMinor: 1800, currency: 'USD' } as const,
+    };
+
+    await expect(
+      service.postExchange({
+        ...exchange,
+        fee: { amountMinor: 0, currency: 'USD' },
+      }),
+    ).rejects.toMatchObject({ code: 'FIN_EXCHANGE_INVALID' });
+    await expect(
+      service.postExchange({
+        ...exchange,
+        fee: { amountMinor: -500, currency: 'BRL' },
+      }),
+    ).rejects.toMatchObject({ code: 'FIN_LINE_AMOUNT_INVALID' });
+
+    const zeroFee = await service.postExchange({
+      ...exchange,
+      fee: { amountMinor: 0, currency: 'BRL' },
+    });
+    expect(zeroFee.lines).toHaveLength(4);
+  });
+
+  it('rejects reversing the same entry twice', async () => {
+    const uid = userId();
+    const cash = await service.createUserAccount({
+      userId: uid,
+      name: 'Cash',
+      type: 'asset',
+      currency: 'BRL',
+    });
+    await service.postOpeningBalance({
+      userId: uid,
+      accountId: cash.id,
+      amountMinor: 10_000,
+    });
+    const expense = await service.postExpense({
+      userId: uid,
+      fundingAccountId: cash.id,
+      amountMinor: 2500,
+    });
+
+    await service.reverseEntry({ userId: uid, entryId: expense.id });
+    await expect(
+      service.reverseEntry({ userId: uid, entryId: expense.id }),
+    ).rejects.toMatchObject({ code: 'FIN_ENTRY_IMMUTABLE' });
+    expect((await service.getAccountBalance(uid, cash.id)).signedBalance).toBe(
+      10_000,
+    );
+  });
+
+  it('rejects a transfer to the same account', async () => {
+    const uid = userId();
+    const cash = await service.createUserAccount({
+      userId: uid,
+      name: 'Cash',
+      type: 'asset',
+      currency: 'BRL',
+    });
+    await expect(
+      service.postTransfer({
+        userId: uid,
+        fromAccountId: cash.id,
+        toAccountId: cash.id,
+        amountMinor: 500,
+      }),
+    ).rejects.toMatchObject({ code: 'FIN_ACCOUNT_TYPE_INVALID' });
+    expect(await service.getAccountLedger(uid, cash.id)).toHaveLength(0);
+  });
+
+  it('rejects postEntry reversing an entry from another user', async () => {
+    const owner = userId();
+    const other = userId();
+    const ownerCash = await service.createUserAccount({
+      userId: owner,
+      name: 'Cash',
+      type: 'asset',
+      currency: 'BRL',
+    });
+    const otherCash = await service.createUserAccount({
+      userId: other,
+      name: 'Cash',
+      type: 'asset',
+      currency: 'BRL',
+    });
+    const ownerEntry = await service.postOpeningBalance({
+      userId: owner,
+      accountId: ownerCash.id,
+      amountMinor: 1000,
+    });
+    await expect(
+      service.postEntry({
+        userId: other,
+        kind: 'reversal',
+        reversesEntryId: ownerEntry.id,
+        lines: [
+          { accountId: otherCash.id, side: 'debit', amountMinor: 100 },
+          { accountId: otherCash.id, side: 'credit', amountMinor: 100 },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'FIN_ENTRY_NOT_FOUND' });
+  });
+
+  it('filters the account ledger by date range', async () => {
+    const uid = userId();
+    const cash = await service.createUserAccount({
+      userId: uid,
+      name: 'Cash',
+      type: 'asset',
+      currency: 'BRL',
+    });
+    await service.postOpeningBalance({
+      userId: uid,
+      accountId: cash.id,
+      amountMinor: 5000,
+      postedAt: new Date('2026-01-10T00:00:00Z'),
+    });
+    await service.postExpense({
+      userId: uid,
+      fundingAccountId: cash.id,
+      amountMinor: 1000,
+      postedAt: new Date('2026-03-10T00:00:00Z'),
+    });
+
+    expect(await service.getAccountLedger(uid, cash.id)).toHaveLength(2);
+    const firstQuarter = await service.getAccountLedger(uid, cash.id, {
+      from: new Date('2026-01-01T00:00:00Z'),
+      to: new Date('2026-02-01T00:00:00Z'),
+    });
+    expect(firstQuarter).toHaveLength(1);
+    expect(firstQuarter[0]?.postedAt).toEqual(new Date('2026-01-10T00:00:00Z'));
+  });
+
   it('hides system accounts from listUserAccounts', async () => {
     const uid = userId();
     await service.createUserAccount({

@@ -24,6 +24,19 @@ enum FinJournalSide {
   @@map("fin_journal_side")
 }
 
+enum FinEntryKind {
+  Expense        @map("expense")
+  Income         @map("income")
+  Transfer       @map("transfer")
+  PayLiability   @map("pay_liability")
+  Exchange       @map("exchange")
+  Split          @map("split")
+  OpeningBalance @map("opening_balance")
+  Reversal       @map("reversal")
+
+  @@map("fin_entry_kind")
+}
+
 enum FinSystemAccountKind {
   Income         @map("income")
   Expense        @map("expense")
@@ -55,7 +68,7 @@ model FinJournalEntry {
   userId          String            @map("user_id") @db.Uuid
   postedAt        DateTime          @map("posted_at")
   description     String?
-  kind            String
+  kind            FinEntryKind
   reversesEntryId String?           @map("reverses_entry_id") @db.Uuid
   createdAt       DateTime          @default(now()) @map("created_at")
   lines           FinJournalLine[]

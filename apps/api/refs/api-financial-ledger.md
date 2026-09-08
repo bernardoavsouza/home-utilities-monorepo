@@ -46,13 +46,30 @@ Commands: `createUserAccount`, `ensureSystemAccounts`, `postExpense`, `postIncom
 `postTransfer`, `postPayLiability`, `postSplitExpense`, `postExchange` (+ optional fee),
 `postOpeningBalance`, `reverseEntry`, `getAccountBalance`, `getAccountLedger`.
 
+`kind` is the Postgres enum `fin_entry_kind` (`expense`, `income`, `transfer`, `pay_liability`,
+`exchange`, `split`, `opening_balance`, `reversal`) — like every other fin enum, PascalCase in
+Prisma and snake_case in the database, mapped in the repository.
+
 Posted entries are immutable; corrections are reversing entries (`kind = reversal`).
+An entry can be reversed **once** — a second `reverseEntry` on the same entry throws
+`FIN_ENTRY_IMMUTABLE`. Reversing a reversal is allowed. `postEntry` validates ownership of
+`reversesEntryId` before insert, so a reversal never points at another user's entry.
+
+Atomicity is scoped to the write: validation (ownership, currency, balance) and
+`ensureSystemAccounts` run **before** the transaction; the entry + its lines are inserted in a
+single atomic nested create. There is no update/delete path, so a mid-post failure leaves no
+partial entry.
+
+`postTransfer` requires two distinct accounts. `getAccountLedger` takes an optional
+`{ from?, to? }` range filtered on `posted_at` — prefer it over listing an account's full history.
 
 ## Exchange
 
 User supplies explicit `fromMoney` + `toMoney` (no market FX API). Lines hit both user accounts
 and per-currency Exchange equity accounts so the entry balances in each currency. Optional fee
-is expense line(s) in the from currency on the same entry.
+is expense line(s) in the from currency on the same entry. A fee is **validated whenever it is
+present** (currency must match `fromMoney`, `amountMinor >= 0`); it only emits lines when
+`amountMinor > 0`.
 
 ## Ownership
 

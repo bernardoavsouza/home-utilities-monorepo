@@ -10,13 +10,15 @@ import {
   accountCurrencyMismatchError,
   accountNotFoundError,
   accountTypeInvalidError,
+  entryImmutableError,
   entryNotFoundError,
+  entryTooFewLinesError,
   exchangeInvalidError,
   lineAmountInvalidError,
 } from '@/modules/financial/domain/ledger/ledger-errors';
 import type {
   FinAccountTypeName,
-  FinEntryKind,
+  FinEntryKindName,
   FinJournalSideName,
   FinSystemAccountKindName,
   PostLineDraft,
@@ -25,6 +27,7 @@ import {
   LedgerRepository,
   type LedgerAccountRecord,
   type LedgerEntryRecord,
+  type LedgerLineRecord,
 } from '@/modules/financial/infrastructure/ledger.repository';
 
 const SYSTEM_ACCOUNT_DEFS: ReadonlyArray<{
@@ -44,7 +47,7 @@ const SYSTEM_ACCOUNT_DEFS: ReadonlyArray<{
 
 export type PostEntryInput = {
   userId: string;
-  kind: FinEntryKind;
+  kind: FinEntryKindName;
   description?: string;
   postedAt?: Date;
   reversesEntryId?: string;
@@ -123,7 +126,17 @@ export class LedgerService {
 
   async postEntry(input: PostEntryInput): Promise<LedgerEntryRecord> {
     if (input.lines.length < 2) {
-      assertEntryBalanced([]);
+      throw entryTooFewLinesError();
+    }
+
+    if (input.reversesEntryId != null) {
+      const reversed = await this.repository.findEntryForUser(
+        input.userId,
+        input.reversesEntryId,
+      );
+      if (!reversed) {
+        throw entryNotFoundError();
+      }
     }
 
     const balanceLines: Array<{
@@ -132,9 +145,22 @@ export class LedgerService {
       currency: CurrencyCode;
     }> = [];
 
+    const accountsById = new Map<string, LedgerAccountRecord>();
+    for (const accountId of new Set(
+      input.lines.map((line) => line.accountId),
+    )) {
+      accountsById.set(
+        accountId,
+        await this.requireAccount(input.userId, accountId),
+      );
+    }
+
     for (const line of input.lines) {
       assertNonNegativeAmountMinor(line.amountMinor);
-      const account = await this.requireAccount(input.userId, line.accountId);
+      const account = accountsById.get(line.accountId);
+      if (!account) {
+        throw accountNotFoundError();
+      }
       assertCurrency(account.currency);
       balanceLines.push({
         side: line.side,
@@ -249,6 +275,9 @@ export class LedgerService {
       input.userId,
       input.toAccountId,
     );
+    if (from.id === to.id) {
+      throw accountTypeInvalidError('Transfer requires two distinct accounts');
+    }
     if (from.currency !== to.currency) {
       throw accountCurrencyMismatchError();
     }
@@ -416,13 +445,16 @@ export class LedgerService {
       },
     ];
 
-    if (input.fee != null && input.fee.amountMinor > 0) {
+    if (input.fee != null) {
       if (input.fee.currency !== input.fromMoney.currency) {
         throw exchangeInvalidError(
           'Fee currency must match fromMoney currency',
         );
       }
       assertNonNegativeAmountMinor(input.fee.amountMinor);
+    }
+
+    if (input.fee != null && input.fee.amountMinor > 0) {
       const expense = await this.requireSystem(
         input.userId,
         'expense',
@@ -519,6 +551,14 @@ export class LedgerService {
       throw entryNotFoundError();
     }
 
+    const existingReversal = await this.repository.findReversalOfEntry(
+      input.userId,
+      original.id,
+    );
+    if (existingReversal) {
+      throw entryImmutableError();
+    }
+
     const lines: PostLineDraft[] = original.lines.map((line) => ({
       accountId: line.accountId,
       side: line.side === 'debit' ? 'credit' : 'debit',
@@ -552,9 +592,13 @@ export class LedgerService {
     };
   }
 
-  async getAccountLedger(userId: string, accountId: string) {
+  async getAccountLedger(
+    userId: string,
+    accountId: string,
+    range?: { from?: Date; to?: Date },
+  ): Promise<LedgerLineRecord[]> {
     await this.requireAccount(userId, accountId);
-    return this.repository.listLinesForAccount(accountId);
+    return this.repository.listLinesForAccount(accountId, range);
   }
 
   private requirePositiveAmount(amountMinor: number): void {
@@ -596,6 +640,15 @@ export class LedgerService {
     systemKind: FinSystemAccountKindName,
     currency: string,
   ): Promise<LedgerAccountRecord> {
+    const existing = await this.repository.findSystemAccount(
+      userId,
+      systemKind,
+      currency,
+    );
+    if (existing) {
+      return existing;
+    }
+
     await this.ensureSystemAccounts(userId, currency);
     const account = await this.repository.findSystemAccount(
       userId,

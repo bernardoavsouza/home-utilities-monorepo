@@ -5,6 +5,9 @@ CREATE TYPE "fin_account_type" AS ENUM ('asset', 'liability', 'income', 'expense
 CREATE TYPE "fin_journal_side" AS ENUM ('debit', 'credit');
 
 -- CreateEnum
+CREATE TYPE "fin_entry_kind" AS ENUM ('expense', 'income', 'transfer', 'pay_liability', 'exchange', 'split', 'opening_balance', 'reversal');
+
+-- CreateEnum
 CREATE TYPE "fin_system_account_kind" AS ENUM ('income', 'expense', 'exchange', 'opening_balance');
 
 -- CreateTable
@@ -28,7 +31,7 @@ CREATE TABLE "fin_journal_entries" (
     "user_id" UUID NOT NULL,
     "posted_at" TIMESTAMP(3) NOT NULL,
     "description" TEXT,
-    "kind" TEXT NOT NULL,
+    "kind" "fin_entry_kind" NOT NULL,
     "reverses_entry_id" UUID,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
