@@ -13,6 +13,7 @@ NestJS + Prisma + PostgreSQL, tested with Vitest and Supertest.
 | `src/` layout (`features/` vs `modules/` vs `shared/`), when a unit gets `domain/` or `infrastructure/`, module wiring, the `@/*` alias, build targets | `refs/api-architecture.md` |
 | Prisma schema, snake_case mapping gate, migrations, seed, `PrismaService` | `refs/api-persistence.md` |
 | Vitest setup, test-database reset, `createTestApp`, which module to boot in an HTTP test | `refs/api-testing.md` |
+| financial ledger — accounts, balanced entries, derived balances, posting commands | `refs/api-financial-ledger.md` |
 
 Repo-wide subjects — env vars, the two databases, CI, `@packages/contracts`, **financial module
 naming** — are indexed in [`../../AGENTS.md`](../../AGENTS.md). Financial domain work follows
@@ -38,7 +39,7 @@ naming** — are indexed in [`../../AGENTS.md`](../../AGENTS.md). Financial doma
 - **Every Postgres identifier is snake_case** via `@map` / `@@map`. A missing map fails the test
   suite, in CI too.
 - **No Prisma model and no product module without a product/spec decision.** `health` is the only
-  **feature**; `modules/financial` holds currency domain (PP-48) and grows with later tickets.
+  **feature**; `modules/financial` holds currency (PP-48) + ledger (PP-49) and grows with later tickets.
 - Controllers and response DTOs carry `@nestjs/swagger` decorators; response DTOs `implements`
   the `@packages/contracts` type.
 - The `@/*` alias is declared in `tsconfig.json`, `.swcrc`, **and** `vitest.config.ts` — change all

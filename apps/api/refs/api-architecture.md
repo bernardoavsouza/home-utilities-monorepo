@@ -1,6 +1,6 @@
 # API — Architecture
 
-> **Status:** stable · **Reviewed:** 2026-08-31 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
+> **Status:** stable · **Reviewed:** 2026-09-07 · **Source:** home-utilities-monorepo@feat/PP-49-ledger-accounts-balanced-entries
 
 > **Altitude:** app ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -48,8 +48,9 @@ through `@packages/contracts` (or an explicit Nest export when a module is wired
 | `infrastructure` | an adapter the unit owns (DB, HTTP client, queue) | **only** when it owns one |
 
 Do **not** scaffold four empty folders. `health` is `application` + `presentation` only.
-`modules/financial` today is **domain only** (currency catalog / Money helpers) until
-application/presentation land with later tickets.
+`modules/financial` has `domain` (currency + ledger), `application` (ledger commands),
+`infrastructure` (Prisma repository), and Nest `FinancialModule`. Presentation/HTTP for fin
+panels lands with later tickets.
 
 The same layer rules apply under `features/<name>/` and under `modules/<name>/`.
 
@@ -57,10 +58,10 @@ The same layer rules apply under `features/<name>/` and under `modules/<name>/`.
 
 | Module | Provides |
 |---|---|
-| `AppModule` | imports `PrismaModule` + `HealthModule` (+ product modules when wired) — the only place they are registered |
+| `AppModule` | imports `PrismaModule` + `HealthModule` + `FinancialModule` — the only place they are registered |
 | `HealthModule` | imports `PrismaModule`; liveness + readiness controllers/services |
 | `PrismaModule` | `@Global()`, exports `PrismaService` — see `api-persistence.md` |
-| `FinancialModule` | **not wired yet** — add when the first Nest provider/controller for financial needs DI |
+| `FinancialModule` | imports `PrismaModule`; exports `LedgerService` + `LedgerRepository` — see `api-financial-ledger.md` |
 
 `HealthModule` imports `PrismaModule` even though it is `@Global()`: the explicit import is what
 lets an HTTP test boot `HealthModule` on its own, without `AppModule`.
@@ -102,5 +103,5 @@ settings breaks injection at runtime, not at compile time.
 ## Scope rule
 
 No product module and no Prisma model without a product/spec decision. `health` is the only
-**feature** until a spec says otherwise; `modules/financial` holds currency domain from PP-48
-and grows with later financial tickets.
+**feature** until a spec says otherwise; `modules/financial` holds currency (PP-48) and ledger
+(PP-49) and grows with later financial tickets.

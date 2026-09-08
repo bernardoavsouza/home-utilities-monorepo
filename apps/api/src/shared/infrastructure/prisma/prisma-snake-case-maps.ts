@@ -24,6 +24,34 @@ function mappedName(
   return source.match(new RegExp(`${attribute}\\(\\s*"([^"]+)"\\s*\\)`))?.[1];
 }
 
+function pluralizeSnake(singular: string): string {
+  if (singular.endsWith('y') && !/[aeiou]y$/i.test(singular)) {
+    return `${singular.slice(0, -1)}ies`;
+  }
+  if (
+    singular.endsWith('s') ||
+    singular.endsWith('x') ||
+    singular.endsWith('z') ||
+    singular.endsWith('ch') ||
+    singular.endsWith('sh')
+  ) {
+    return `${singular}es`;
+  }
+  return `${singular}s`;
+}
+
+function isAllowedModelMap(identifier: string, actual: string): boolean {
+  const expected = toSnakeCase(identifier);
+  if (actual === expected) {
+    return true;
+  }
+  // Fin* models use plural table names (fin_accounts) per monorepo-fin-module.
+  if (identifier.startsWith('Fin') && actual === pluralizeSnake(expected)) {
+    return actual.startsWith('fin_');
+  }
+  return false;
+}
+
 function requireMap(
   violations: string[],
   label: string,
@@ -34,12 +62,17 @@ function requireMap(
   if (expected === identifier) {
     return;
   }
-  if (actual !== expected) {
-    const attr =
-      label.startsWith('model ') || label.startsWith('enum ')
-        ? '@@map'
-        : '@map';
-    violations.push(`${label} missing ${attr}("${expected}")`);
+  const isModel = label.startsWith('model ');
+  const accepted =
+    actual !== undefined &&
+    (isModel ? isAllowedModelMap(identifier, actual) : actual === expected);
+  if (!accepted) {
+    const attr = isModel || label.startsWith('enum ') ? '@@map' : '@map';
+    const hint =
+      isModel && identifier.startsWith('Fin')
+        ? `${expected}" or "${pluralizeSnake(expected)}`
+        : expected;
+    violations.push(`${label} missing ${attr}("${hint}")`);
   }
 }
 

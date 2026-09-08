@@ -6,3 +6,88 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum FinAccountType {
+  Asset     @map("asset")
+  Liability @map("liability")
+  Income    @map("income")
+  Expense   @map("expense")
+  Equity    @map("equity")
+
+  @@map("fin_account_type")
+}
+
+enum FinJournalSide {
+  Debit  @map("debit")
+  Credit @map("credit")
+
+  @@map("fin_journal_side")
+}
+
+enum FinEntryKind {
+  Expense        @map("expense")
+  Income         @map("income")
+  Transfer       @map("transfer")
+  PayLiability   @map("pay_liability")
+  Exchange       @map("exchange")
+  Split          @map("split")
+  OpeningBalance @map("opening_balance")
+  Reversal       @map("reversal")
+
+  @@map("fin_entry_kind")
+}
+
+enum FinSystemAccountKind {
+  Income         @map("income")
+  Expense        @map("expense")
+  Exchange       @map("exchange")
+  OpeningBalance @map("opening_balance")
+
+  @@map("fin_system_account_kind")
+}
+
+model FinAccount {
+  id         String                 @id @default(uuid()) @db.Uuid
+  userId     String                 @map("user_id") @db.Uuid
+  name       String
+  type       FinAccountType
+  currency   String
+  systemKind FinSystemAccountKind?  @map("system_kind")
+  createdAt  DateTime               @default(now()) @map("created_at")
+  updatedAt  DateTime               @updatedAt @map("updated_at")
+  lines      FinJournalLine[]
+
+  @@unique([userId, systemKind, currency], map: "fin_accounts_user_system_currency_key")
+  @@index([userId], map: "fin_accounts_user_id_idx")
+  @@map("fin_accounts")
+}
+
+model FinJournalEntry {
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @map("user_id") @db.Uuid
+  postedAt        DateTime          @map("posted_at")
+  description     String?
+  kind            FinEntryKind
+  reversesEntryId String?           @unique @map("reverses_entry_id") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at")
+  lines           FinJournalLine[]
+  reversesEntry   FinJournalEntry?  @relation("FinEntryReversal", fields: [reversesEntryId], references: [id])
+  reversedBy      FinJournalEntry?  @relation("FinEntryReversal")
+
+  @@index([userId, postedAt], map: "fin_journal_entries_user_posted_idx")
+  @@map("fin_journal_entries")
+}
+
+model FinJournalLine {
+  id          String          @id @default(uuid()) @db.Uuid
+  entryId     String          @map("entry_id") @db.Uuid
+  accountId   String          @map("account_id") @db.Uuid
+  side        FinJournalSide
+  amountMinor BigInt          @map("amount_minor")
+  entry       FinJournalEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  account     FinAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId], map: "fin_journal_lines_account_id_idx")
+  @@index([entryId], map: "fin_journal_lines_entry_id_idx")
+  @@map("fin_journal_lines")
+}

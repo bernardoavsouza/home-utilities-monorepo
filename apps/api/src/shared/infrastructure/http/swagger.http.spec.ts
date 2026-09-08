@@ -1,8 +1,10 @@
 import { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from 'supertest/types';
 import { HealthModule } from '@/features/health/health.module';
+import { configureApp } from '@/shared/infrastructure/http/configure-app';
 import { createTestApp } from '@/shared/infrastructure/http/create-test-app';
 import { isSwaggerEnabled } from '@/shared/infrastructure/http/setup-swagger';
 
@@ -88,7 +90,17 @@ describe('Swagger HTTP', () => {
     it('is off by default in production', async () => {
       process.env.NODE_ENV = 'production';
       delete process.env.SWAGGER_ENABLED;
-      app = await createTestApp(HealthModule);
+      // PrismaClient eagerly loads apps/api/.env and can reintroduce SWAGGER_ENABLED.
+      // Re-assert the production default after the testing module compiles.
+      const moduleRef = await Test.createTestingModule({
+        imports: [HealthModule],
+      }).compile();
+      process.env.NODE_ENV = 'production';
+      delete process.env.SWAGGER_ENABLED;
+      expect(isSwaggerEnabled()).toBe(false);
+      app = moduleRef.createNestApplication();
+      configureApp(app);
+      await app.init();
 
       await request(app.getHttpServer() as App)
         .get('/docs-json')

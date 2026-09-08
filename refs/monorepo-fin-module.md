@@ -1,6 +1,6 @@
 # Monorepo — Financial module (naming & boundary)
 
-> **Status:** stable · **Reviewed:** 2026-08-31 · **Source:** home-utilities-monorepo@feat/PP-48-currency-catalog-money
+> **Status:** stable · **Reviewed:** 2026-09-07 · **Source:** home-utilities-monorepo@feat/PP-49-ledger-accounts-balanced-entries
 
 > **Altitude:** repo ref. File/class/symbol names are **implementation anchors** (they drift);
 > the rule does not depend on them.
@@ -48,26 +48,25 @@ Canonical layout — create folders **only** when they hold real code (no empty 
 apps/api/src/
   features/health/                 # geral (boilerplate)
   modules/financial/
-    financial.module.ts            # when first Nest wiring lands
-    application/
-    presentation/                  # controllers under /v1/fin/…
+    financial.module.ts            # Nest wiring (LedgerService + repository)
+    application/                   # ledger posting commands (PP-49)
+    presentation/                  # controllers under /v1/fin/… (HTTP later)
     domain/
       currency/                    # MVP catalog + Money helpers (PP-48)
-    infrastructure/                # only if the module owns an adapter
+      ledger/                      # balance invariants (PP-49)
+    infrastructure/                # Prisma ledger repository (PP-49)
   shared/                          # geral kernel
 ```
 
 Encapsulation: other modules/features do not import `modules/financial/**` internals. Share via
-`@packages/contracts` or Nest exports from `FinancialModule` when it exists.
+`@packages/contracts` or Nest exports from `FinancialModule`.
 
-Wiring: import `FinancialModule` from `AppModule` when the first controller/provider needs Nest
-DI (same pattern as `HealthModule` in `apps/api/refs/api-architecture.md`). Pure domain helpers
-may exist without a Nest module until that wiring lands.
+Wiring: `FinancialModule` is imported from `AppModule`. Ledger HTTP controllers are not present
+yet (PP-52+); application services are the programmatic surface.
 
-**Today:** domain currency catalog/helpers live under
-`modules/financial/domain/currency/`. There is **no** Nest `FinancialModule` / `/v1/fin`
-controller and **no** fin Prisma model in `schema.prisma` yet (ledger/HTTP follow in later
-tickets).
+**Today:** currency catalog/helpers + ledger domain/application/infrastructure live under
+`modules/financial/`. Prisma models: `fin_accounts`, `fin_journal_entries`, `fin_journal_lines`.
+No `/v1/fin` HTTP controller yet.
 
 ## Code layout (Web)
 
@@ -85,14 +84,15 @@ Builds on `apps/api/refs/api-persistence.md` (PascalCase models, snake_case DB, 
 
 | Rule | Detail |
 |---|---|
-| Every fin table/enum maps to `fin_…` | e.g. model `FinAccount` → `@@map("fin_accounts")` |
+| Every fin table/enum maps to `fin_…` | e.g. model `FinAccount` → `@@map("fin_accounts")` (plural tables) |
 | No bare financial tables | `accounts`, `categories`, `budgets` without `fin_` are wrong |
 | Money always has currency | `amountMinor` + `currency`; codes come from the shared closed `CurrencyCode` MVP union |
-| 1 account = 1 currency | Each fin account has exactly one currency; a posting must have `money.currency === account.currency`. Cross-currency movement is between accounts (ledger shape), never automatic FX |
+| 1 account = 1 currency | Each fin account has exactly one currency; a posting must have `money.currency === account.currency`. Cross-currency uses Exchange equity system accounts with explicit from/to amounts — never automatic FX |
+| Balances are derived | no parallel balance column; signed balance from journal lines by account type |
 
-The `fin_` table prefix is a convention today. Extend the existing snake_case map gate
-(`apps/api/src/shared/infrastructure/prisma/prisma-snake-case-maps.ts`) to enforce the prefix
-when the first fin model lands.
+The snake_case map gate accepts `Fin*` model `@@map` values that are either
+`toSnakeCase(ModelName)` or its English plural (so `FinAccount` → `fin_accounts` is valid)
+and must keep the `fin_` prefix. Ledger behavior: `apps/api/refs/api-financial-ledger.md`.
 
 ## HTTP
 

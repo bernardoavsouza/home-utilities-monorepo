@@ -60,6 +60,25 @@ describe('collectPrismaSnakeCaseViolations', () => {
     expect(collectPrismaSnakeCaseViolations(schema)).toEqual([]);
   });
 
+  it('accepts plural fin_* table maps for Fin* models', () => {
+    const schema = `
+      model FinAccount {
+        id        String   @id
+        createdAt DateTime @map("created_at")
+
+        @@map("fin_accounts")
+      }
+
+      model FinJournalEntry {
+        id String @id
+
+        @@map("fin_journal_entries")
+      }
+    `;
+
+    expect(collectPrismaSnakeCaseViolations(schema)).toEqual([]);
+  });
+
   it('accepts the committed schema', () => {
     const schema = readFileSync(
       join(process.cwd(), 'prisma/schema.prisma'),
