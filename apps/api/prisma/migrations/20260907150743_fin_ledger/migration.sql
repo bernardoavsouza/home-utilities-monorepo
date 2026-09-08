@@ -56,6 +56,9 @@ CREATE INDEX "fin_accounts_user_id_idx" ON "fin_accounts"("user_id");
 CREATE UNIQUE INDEX "fin_accounts_user_system_currency_key" ON "fin_accounts"("user_id", "system_kind", "currency");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "fin_journal_entries_reverses_entry_id_key" ON "fin_journal_entries"("reverses_entry_id");
+
+-- CreateIndex
 CREATE INDEX "fin_journal_entries_user_posted_idx" ON "fin_journal_entries"("user_id", "posted_at");
 
 -- CreateIndex

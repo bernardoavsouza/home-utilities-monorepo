@@ -52,7 +52,10 @@ Prisma and snake_case in the database, mapped in the repository.
 
 Posted entries are immutable; corrections are reversing entries (`kind = reversal`).
 An entry can be reversed **once** — a second `reverseEntry` on the same entry throws
-`FIN_ENTRY_IMMUTABLE`. Reversing a reversal is allowed. `postEntry` validates ownership of
+`FIN_ENTRY_IMMUTABLE`, and `reverses_entry_id` is `UNIQUE`, so the database holds the invariant
+even against writes that skip the service. Reversing a reversal is allowed. Partial reversal is
+deliberately out: a partial refund is a new fact and will get its own kind and link, not a second
+row pointing at the same original. `postEntry` validates ownership of
 `reversesEntryId` before insert, so a reversal never points at another user's entry.
 
 Atomicity is scoped to the write: validation (ownership, currency, balance) and

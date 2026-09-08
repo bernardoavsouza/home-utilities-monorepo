@@ -557,6 +557,35 @@ describe('LedgerService', () => {
     );
   });
 
+  it('lets the database reject a second reversal even if the guard is bypassed', async () => {
+    const uid = userId();
+    const cash = await service.createUserAccount({
+      userId: uid,
+      name: 'Cash',
+      type: 'asset',
+      currency: 'BRL',
+    });
+    const original = await service.postOpeningBalance({
+      userId: uid,
+      accountId: cash.id,
+      amountMinor: 4000,
+    });
+    await service.reverseEntry({ userId: uid, entryId: original.id });
+
+    // Writing straight through Prisma skips the application guard, so this
+    // asserts the unique index itself is what holds the invariant.
+    await expect(
+      prisma.finJournalEntry.create({
+        data: {
+          userId: uid,
+          kind: 'Reversal',
+          postedAt: new Date(),
+          reversesEntryId: original.id,
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
+  });
+
   it('rejects a transfer to the same account', async () => {
     const uid = userId();
     const cash = await service.createUserAccount({

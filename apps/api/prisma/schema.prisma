@@ -69,11 +69,11 @@ model FinJournalEntry {
   postedAt        DateTime          @map("posted_at")
   description     String?
   kind            FinEntryKind
-  reversesEntryId String?           @map("reverses_entry_id") @db.Uuid
+  reversesEntryId String?           @unique @map("reverses_entry_id") @db.Uuid
   createdAt       DateTime          @default(now()) @map("created_at")
   lines           FinJournalLine[]
   reversesEntry   FinJournalEntry?  @relation("FinEntryReversal", fields: [reversesEntryId], references: [id])
-  reversedBy      FinJournalEntry[] @relation("FinEntryReversal")
+  reversedBy      FinJournalEntry?  @relation("FinEntryReversal")
 
   @@index([userId, postedAt], map: "fin_journal_entries_user_posted_idx")
   @@map("fin_journal_entries")
